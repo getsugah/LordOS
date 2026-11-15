@@ -1,0 +1,48 @@
+{
+  "commit": "0c0b9abc",
+  "date": "2026-11-15",
+  "iso": "lordos-live-0.8.8-amd64.iso",
+  "iso_sha256": "e9fc3f51303407718eb7635d073a917fbecd77b24a0fcd1bb1965ad2e682b836",
+  "server_sha256": "2e32246d8dd919a5e0c6a37f0b5245fb95f6789bc0a54f3c07f2b093bee82e5c",
+  "accelerator": "KVM",
+  "vcpus": 2,
+  "ram_mib": 4096,
+  "guest_resolution": "1024x768",
+  "guest_network": false,
+  "host_device_passthrough": false,
+  "physical_mouse_validated": false,
+  "suites": [
+    {
+      "suite": "default-integration",
+      "passed": 51,
+      "failed": 0
+    },
+    {
+      "suite": "default-browser",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "suite": "classic-integration",
+      "passed": 51,
+      "failed": 0
+    },
+    {
+      "suite": "classic-decorations",
+      "passed": 37,
+      "failed": 0
+    },
+    {
+      "suite": "classic-browser",
+      "passed": 7,
+      "failed": 0
+    },
+    {
+      "suite": "left-handed-maximized",
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "passed": 162,
+  "failed": 0
+}

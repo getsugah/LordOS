@@ -1,0 +1,37 @@
+[
+  {
+    "test": "Firefox local page A loaded",
+    "passed": true,
+    "details": "A"
+  },
+  {
+    "test": "local link opens B",
+    "passed": true,
+    "details": "B"
+  },
+  {
+    "test": "local link opens C",
+    "passed": true,
+    "details": "C"
+  },
+  {
+    "test": "side navigates to B",
+    "passed": true,
+    "details": "B"
+  },
+  {
+    "test": "side navigates to A",
+    "passed": true,
+    "details": "A"
+  },
+  {
+    "test": "extra navigates to B",
+    "passed": true,
+    "details": "B"
+  },
+  {
+    "test": "extra navigates to C",
+    "passed": true,
+    "details": "C"
+  }
+]

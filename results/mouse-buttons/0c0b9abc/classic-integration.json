@@ -1,0 +1,901 @@
+[
+  {
+    "test": "KVM acceleration",
+    "passed": true,
+    "details": null
+  },
+  {
+    "test": "probe mapped",
+    "passed": true,
+    "details": [
+      336,
+      247,
+      736,
+      521
+    ]
+  },
+  {
+    "test": "five evdev buttons reach Wayland client",
+    "passed": true,
+    "details": [
+      [
+        272,
+        1
+      ],
+      [
+        272,
+        0
+      ],
+      [
+        274,
+        1
+      ],
+      [
+        274,
+        0
+      ],
+      [
+        273,
+        1
+      ],
+      [
+        273,
+        0
+      ],
+      [
+        275,
+        1
+      ],
+      [
+        275,
+        0
+      ],
+      [
+        276,
+        1
+      ],
+      [
+        276,
+        0
+      ]
+    ]
+  },
+  {
+    "test": "client move rejected for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "client move rejected for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "client resize rejected for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "client resize rejected for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "title does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "left does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "right does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top-left does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top-right does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom-left does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom-right does not start grab for side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "title does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "left does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "right does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top-left does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "top-right does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom-left does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "bottom-right does not start grab for extra",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "after": [
+        336,
+        247,
+        736,
+        521
+      ]
+    }
+  },
+  {
+    "test": "left can move with side",
+    "passed": true,
+    "details": {
+      "before": [
+        336,
+        247,
+        736,
+        521
+      ],
+      "during": [
+        354,
+        259,
+        754,
+        533
+      ]
+    }
+  },
+  {
+    "test": "move finishes when left released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        354,
+        259,
+        754,
+        533
+      ],
+      "after": [
+        354,
+        259,
+        754,
+        533
+      ]
+    }
+  },
+  {
+    "test": "middle can move with side",
+    "passed": true,
+    "details": {
+      "before": [
+        354,
+        259,
+        754,
+        533
+      ],
+      "during": [
+        372,
+        271,
+        772,
+        545
+      ]
+    }
+  },
+  {
+    "test": "move finishes when middle released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        372,
+        271,
+        772,
+        545
+      ],
+      "after": [
+        372,
+        271,
+        772,
+        545
+      ]
+    }
+  },
+  {
+    "test": "right can move with side",
+    "passed": true,
+    "details": {
+      "before": [
+        372,
+        271,
+        772,
+        545
+      ],
+      "during": [
+        390,
+        283,
+        790,
+        557
+      ]
+    }
+  },
+  {
+    "test": "move finishes when right released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        390,
+        283,
+        790,
+        557
+      ],
+      "after": [
+        390,
+        283,
+        790,
+        557
+      ]
+    }
+  },
+  {
+    "test": "left can move with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        390,
+        283,
+        790,
+        557
+      ],
+      "during": [
+        408,
+        295,
+        808,
+        569
+      ]
+    }
+  },
+  {
+    "test": "move finishes when left released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        408,
+        295,
+        808,
+        569
+      ],
+      "after": [
+        408,
+        295,
+        808,
+        569
+      ]
+    }
+  },
+  {
+    "test": "middle can move with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        408,
+        295,
+        808,
+        569
+      ],
+      "during": [
+        426,
+        307,
+        826,
+        581
+      ]
+    }
+  },
+  {
+    "test": "move finishes when middle released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        426,
+        307,
+        826,
+        581
+      ],
+      "after": [
+        426,
+        307,
+        826,
+        581
+      ]
+    }
+  },
+  {
+    "test": "right can move with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        426,
+        307,
+        826,
+        581
+      ],
+      "during": [
+        444,
+        319,
+        844,
+        593
+      ]
+    }
+  },
+  {
+    "test": "move finishes when right released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        844,
+        593
+      ],
+      "after": [
+        444,
+        319,
+        844,
+        593
+      ]
+    }
+  },
+  {
+    "test": "left can resize with side",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        844,
+        593
+      ],
+      "during": [
+        444,
+        319,
+        832,
+        585
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when left released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        832,
+        585
+      ],
+      "after": [
+        444,
+        319,
+        832,
+        585
+      ]
+    }
+  },
+  {
+    "test": "middle can resize with side",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        832,
+        585
+      ],
+      "during": [
+        444,
+        319,
+        820,
+        577
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when middle released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        820,
+        577
+      ],
+      "after": [
+        444,
+        319,
+        820,
+        577
+      ]
+    }
+  },
+  {
+    "test": "right can resize with side",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        820,
+        577
+      ],
+      "during": [
+        444,
+        319,
+        808,
+        569
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when right released with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        808,
+        569
+      ],
+      "after": [
+        444,
+        319,
+        808,
+        569
+      ]
+    }
+  },
+  {
+    "test": "left can resize with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        808,
+        569
+      ],
+      "during": [
+        444,
+        319,
+        796,
+        561
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when left released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        796,
+        561
+      ],
+      "after": [
+        444,
+        319,
+        796,
+        561
+      ]
+    }
+  },
+  {
+    "test": "middle can resize with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        796,
+        561
+      ],
+      "during": [
+        444,
+        319,
+        784,
+        553
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when middle released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        784,
+        553
+      ],
+      "after": [
+        444,
+        319,
+        784,
+        553
+      ]
+    }
+  },
+  {
+    "test": "right can resize with extra",
+    "passed": true,
+    "details": {
+      "before": [
+        444,
+        319,
+        784,
+        553
+      ],
+      "during": [
+        444,
+        319,
+        772,
+        545
+      ]
+    }
+  },
+  {
+    "test": "resize finishes when right released with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        444,
+        319,
+        772,
+        545
+      ],
+      "after": [
+        444,
+        319,
+        772,
+        545
+      ]
+    }
+  },
+  {
+    "test": "side move request observed",
+    "passed": true,
+    "details": null
+  },
+  {
+    "test": "extra resize request observed",
+    "passed": true,
+    "details": null
+  }
+]

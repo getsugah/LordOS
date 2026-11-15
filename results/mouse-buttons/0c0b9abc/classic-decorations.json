@@ -1,0 +1,692 @@
+[
+  {
+    "test": "decoration title ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration left ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration right ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top-left ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top-right ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom-left ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom-right ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration title ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration left ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration right ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top-left ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration top-right ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom-left ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "decoration bottom-right ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        420,
+        287,
+        844,
+        609
+      ]
+    }
+  },
+  {
+    "test": "title original behavior left",
+    "passed": true,
+    "details": {
+      "before": [
+        420,
+        287,
+        844,
+        609
+      ],
+      "after": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "configure_before": [
+        424,
+        322
+      ],
+      "configure_after": [
+        424,
+        322
+      ]
+    }
+  },
+  {
+    "test": "title original behavior middle",
+    "passed": true,
+    "details": {
+      "before": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "after": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "configure_before": [
+        424,
+        322
+      ],
+      "configure_after": [
+        424,
+        322
+      ]
+    }
+  },
+  {
+    "test": "title original behavior right",
+    "passed": true,
+    "details": {
+      "before": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "after": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "configure_before": [
+        424,
+        322
+      ],
+      "configure_after": [
+        424,
+        322
+      ]
+    }
+  },
+  {
+    "test": "actual top grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        432,
+        295,
+        856,
+        617
+      ],
+      "during": [
+        432,
+        287,
+        856,
+        617
+      ]
+    }
+  },
+  {
+    "test": "top resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        432,
+        287,
+        856,
+        617
+      ],
+      "after": [
+        432,
+        287,
+        856,
+        617
+      ]
+    }
+  },
+  {
+    "test": "actual bottom grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        432,
+        287,
+        856,
+        617
+      ],
+      "during": [
+        432,
+        287,
+        856,
+        625
+      ]
+    }
+  },
+  {
+    "test": "bottom resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        432,
+        287,
+        856,
+        625
+      ],
+      "after": [
+        432,
+        287,
+        856,
+        625
+      ]
+    }
+  },
+  {
+    "test": "actual left grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        432,
+        287,
+        856,
+        625
+      ],
+      "during": [
+        424,
+        287,
+        856,
+        625
+      ]
+    }
+  },
+  {
+    "test": "left resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        424,
+        287,
+        856,
+        625
+      ],
+      "after": [
+        424,
+        287,
+        856,
+        625
+      ]
+    }
+  },
+  {
+    "test": "actual right grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        424,
+        287,
+        856,
+        625
+      ],
+      "during": [
+        424,
+        287,
+        864,
+        625
+      ]
+    }
+  },
+  {
+    "test": "right resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        424,
+        287,
+        864,
+        625
+      ],
+      "after": [
+        424,
+        287,
+        864,
+        625
+      ]
+    }
+  },
+  {
+    "test": "actual top-left grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        424,
+        287,
+        864,
+        625
+      ],
+      "during": [
+        416,
+        279,
+        864,
+        625
+      ]
+    }
+  },
+  {
+    "test": "top-left resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        416,
+        279,
+        864,
+        625
+      ],
+      "after": [
+        416,
+        279,
+        864,
+        625
+      ]
+    }
+  },
+  {
+    "test": "actual top-right grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        416,
+        279,
+        864,
+        625
+      ],
+      "during": [
+        416,
+        271,
+        872,
+        625
+      ]
+    }
+  },
+  {
+    "test": "top-right resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        416,
+        271,
+        872,
+        625
+      ],
+      "after": [
+        416,
+        271,
+        872,
+        625
+      ]
+    }
+  },
+  {
+    "test": "actual bottom-left grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        416,
+        271,
+        872,
+        625
+      ],
+      "during": [
+        408,
+        271,
+        872,
+        633
+      ]
+    }
+  },
+  {
+    "test": "bottom-left resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        408,
+        271,
+        872,
+        633
+      ],
+      "after": [
+        408,
+        271,
+        872,
+        633
+      ]
+    }
+  },
+  {
+    "test": "actual bottom-right grip resizes",
+    "passed": true,
+    "details": {
+      "before": [
+        408,
+        271,
+        872,
+        633
+      ],
+      "during": [
+        408,
+        271,
+        880,
+        641
+      ]
+    }
+  },
+  {
+    "test": "bottom-right resize ends with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        408,
+        271,
+        880,
+        641
+      ],
+      "after": [
+        408,
+        271,
+        880,
+        641
+      ]
+    }
+  }
+]

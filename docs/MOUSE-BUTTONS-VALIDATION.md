@@ -66,7 +66,7 @@ une application graphique réelle.
 - Aucun essai fonctionnel avec la MX Master 2S, aucun lancement du compositeur
   corrigé, aucune installation de ce compositeur et aucun redémarrage de session.
 
-## Procédure proposée — en attente de validation
+## Procédure proposée initialement — exécutée ensuite en VM
 
 **Méthode recommandée : une VM de test dédiée, avec instantané, sans accès
  direct au GPU ni aux périphériques d'entrée de la machine hôte.**
@@ -113,4 +113,6 @@ par `evtest`, en lecture seule sur son périphérique identifié, **sans `--grab
 Elle nécessite de vérifier les droits et ne valide que les codes émis par le
 matériel, pas le correctif dans le compositeur. Aucun tel relevé n'a été effectué.
 
-**Ne pas exécuter cette procédure avant validation explicite.**
+La procédure a ensuite été approuvée et exécutée en VM : voir les
+[résultats d’intégration](../results/mouse-buttons/0c0b9abc/README.md).
+La souris physique reste à valider.

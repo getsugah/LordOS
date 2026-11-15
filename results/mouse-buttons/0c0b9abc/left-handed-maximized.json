@@ -1,0 +1,160 @@
+[
+  {
+    "test": "left-handed swaps left/right and preserves middle/side/extra",
+    "passed": true,
+    "details": [
+      [
+        273,
+        1
+      ],
+      [
+        273,
+        0
+      ],
+      [
+        274,
+        1
+      ],
+      [
+        274,
+        0
+      ],
+      [
+        272,
+        1
+      ],
+      [
+        272,
+        0
+      ],
+      [
+        275,
+        1
+      ],
+      [
+        275,
+        0
+      ],
+      [
+        276,
+        1
+      ],
+      [
+        276,
+        0
+      ]
+    ]
+  },
+  {
+    "test": "maximize before side test",
+    "passed": true,
+    "details": [
+      1,
+      70,
+      1023,
+      685
+    ]
+  },
+  {
+    "test": "maximized title ignores side",
+    "passed": true,
+    "details": {
+      "before": [
+        1,
+        70,
+        1023,
+        685
+      ],
+      "after": [
+        1,
+        70,
+        1023,
+        685
+      ]
+    }
+  },
+  {
+    "test": "primary drag restores maximized window with side",
+    "passed": true,
+    "details": [
+      346,
+      95,
+      746,
+      395
+    ]
+  },
+  {
+    "test": "JS fallback stops on primary release with side held",
+    "passed": true,
+    "details": {
+      "released": [
+        346,
+        95,
+        746,
+        395
+      ],
+      "after": [
+        346,
+        95,
+        746,
+        395
+      ]
+    }
+  },
+  {
+    "test": "maximize before extra test",
+    "passed": true,
+    "details": [
+      1,
+      70,
+      1023,
+      685
+    ]
+  },
+  {
+    "test": "maximized title ignores extra",
+    "passed": true,
+    "details": {
+      "before": [
+        1,
+        70,
+        1023,
+        685
+      ],
+      "after": [
+        1,
+        70,
+        1023,
+        685
+      ]
+    }
+  },
+  {
+    "test": "primary drag restores maximized window with extra",
+    "passed": true,
+    "details": [
+      346,
+      95,
+      746,
+      395
+    ]
+  },
+  {
+    "test": "JS fallback stops on primary release with extra held",
+    "passed": true,
+    "details": {
+      "released": [
+        346,
+        95,
+        746,
+        395
+      ],
+      "after": [
+        346,
+        95,
+        746,
+        395
+      ]
+    }
+  }
+]
