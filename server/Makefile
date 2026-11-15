@@ -1114,3 +1114,23 @@ build/wallpaper-image-test: tests/wallpaper_image_test.c src/hw/wallpaper_image.
 	$(CC) $(CPPFLAGS) -O1 -g -w -std=gnu11 -fsanitize=address,undefined -fno-sanitize=shift -fno-sanitize-recover=all -o $@ tests/wallpaper_image_test.c src/hw/wallpaper_image.c src/ui/stb.c -lm
 	ASAN_OPTIONS=detect_leaks=0 ./$@ || { rm -f $@; exit 1; }
 test: build/wallpaper-image-test
+
+# Shared physical mouse and Wayland client button mapping.
+test: build/mousebuttons-test
+build/mousebuttons-test: tests/mousebuttons_test.c src/mousebuttons.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -o $@ tests/mousebuttons_test.c
+	./$@
+
+# Window grab eligibility and release, using the actual C implementation.
+test: build/grab-buttons-test
+build/grab-buttons-test: tests/grab_buttons_test.c src/ui/grab.c src/ui/grab.h src/ui/ui.h src/cursor.h src/bench/lbinput.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -o $@ tests/grab_buttons_test.c src/ui/grab.c -lm
+	./$@ || { rm -f $@; exit 1; }
+
+test: build/wl-mousebuttons-test
+build/wl-mousebuttons-test: tests/wl_mousebuttons_test.c src/wl/wl.c $(HDR)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -ffunction-sections -fdata-sections -o $@ tests/wl_mousebuttons_test.c -Wl,--gc-sections -lwayland-server -lwayland-client
+	./$@ || { rm -f $@; exit 1; }

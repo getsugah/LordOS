@@ -32,6 +32,7 @@
 #include "canvas.h"
 #include "par.h"
 #include "input.h"
+#include "mousebuttons.h"
 #include "kms.h"
 #include "drmcard.h"
 #include "term/term.h"
@@ -1150,8 +1151,8 @@ static void on_input(void *ud, const InputDevice *d, const struct input_event *e
         /* ends a share with no JavaScript in the way; only here, on the physical keyboard: what the API or
          * the remote desktop injects doesn't pass through on_input (docs/SHORTCUTS.md) */
         if (ev->code == KEY_ESC && ev->value == 1 && s->ctrl && s->alt && s->shift && share_user_stop()) break;
-        /* Botones con la numeración del DOM: 0 izquierdo, 1 medio, 2 derecho. */
-        int button = ev->code == BTN_LEFT ? 0 : ev->code == BTN_MIDDLE ? 1 : ev->code == BTN_RIGHT ? 2 : -1;
+        /* Botones con la numeración del DOM: 0 izquierdo, 1 medio, 2 derecho, 3 atrás, 4 adelante. */
+        int button = mouse_button_from_evdev(ev->code);
         /* Settings → Mouse & Trackpad, primary button on the right: a mouse's (not a touchpad's) */
         if ((button == 0 || button == 2) && !d->tp && d->fd >= 0 && tp_config()->mouse_left_handed) button = 2 - button;
         if (button >= 0 && ev->value != 2 && s->nbuttons < MAX_BUTTONS)

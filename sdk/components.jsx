@@ -1218,9 +1218,9 @@ export function FloatingWindows() {
       {pips.map((w) => (
         <View key={w.id} style={{ position: 'absolute', left: w.pip.x, top: w.pip.y, width: w.pip.w, height: w.pip.h, borderRadius: 10,
           overflow: 'hidden', backgroundColor: '#000', boxShadow: '0 18px 48px rgba(0,0,0,0.55)', pointerEvents: 'auto' }}
-          onMouseDown={(e) => { drag.current = { id: w.id, x: e.x, y: e.y, frame: w.pip }; }}>
+          onMouseDown={(e) => { if (e.button > 2) return; drag.current = { id: w.id, x: e.x, y: e.y, frame: w.pip }; }}>
           <AppHost id={w.id} focused={false} />
-          <View onMouseDown={(e) => { e.stopPropagation?.(); drag.current = { id: w.id, x: e.x, y: e.y, frame: w.pip, resize: true }; }}
+          <View onMouseDown={(e) => { e.stopPropagation?.(); if (e.button > 2) return; drag.current = { id: w.id, x: e.x, y: e.y, frame: w.pip, resize: true }; }}
             style={{ position: 'absolute', right: 0, bottom: 0, width: 18, height: 18 }} />
         </View>
       ))}

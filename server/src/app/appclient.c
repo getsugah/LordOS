@@ -11,6 +11,7 @@
  * Lo lanza lord-server (tercera excepción acotada a «el servidor no ejecuta comandos», ver
  * AGENTS.md): el único argumento es un id validado de un paquete instalado. */
 #include "app.h"
+#include "../mousebuttons.h"
 #include "../lordlog.h"
 #include "../sec/codesig.h"
 #include "../ui/ui.h"
@@ -326,7 +327,7 @@ static void p_motion(void *d, struct wl_pointer *p, uint32_t t, wl_fixed_t x, wl
 }
 static void p_button(void *d, struct wl_pointer *p, uint32_t s, uint32_t t, uint32_t b, uint32_t st) {
     (void)d; (void)p; (void)s; (void)t;
-    int button = b == BTN_LEFT ? 0 : b == BTN_MIDDLE ? 1 : b == BTN_RIGHT ? 2 : -1;
+    int button = mouse_button_from_evdev(b);
     if (button >= 0 && nptr < 8) { ptr_down[nptr] = st == WL_POINTER_BUTTON_STATE_PRESSED; ptr_btn[nptr] = button; nptr++; }
     dispatch_pointer();
 }

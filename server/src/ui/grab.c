@@ -22,10 +22,13 @@ static int ptr_buttons;
 void grab_note_pointer(float x, float y, int buttons) {
     ptr_x = x;
     ptr_y = y;
-    ptr_buttons = buttons;
+    /* Only the original three buttons participate in window grabs. Keep the
+     * full held-button mask in main.c for clients and other input consumers. */
+    ptr_buttons = buttons & 7;
 }
 
 int grab_active(void) { return g.active; }
+int grab_can_begin(void) { return ptr_buttons != 0; }
 
 int grab_state(float *x, float *y, int *edges) {
     *x = ptr_x;
@@ -69,7 +72,7 @@ static int setup(int node, int edges, const GrabLimits *lim) {
 }
 
 int grab_begin(int node, int edges, const GrabLimits *lim) {
-    if (!ptr_buttons) return -1;
+    if (!grab_can_begin()) return -1;
     script_off();
     return setup(node, edges, lim);
 }

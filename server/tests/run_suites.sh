@@ -60,6 +60,8 @@ shape() {
 
 quick() {
     echo "== suites (tests/run_suites.sh)"
+    if have node; then run "window-grab-buttons (window handlers and JS fallback)" node tests/window_grab_buttons_test.mjs
+    else skip "window-grab-buttons" "node"; fi
     # terminal emulator (examples of docs/TERMINAL.md and docs/VM-SETUP.md)
     vt "vt-dump: colors, resize and search" 'hello\033[31m red\r\n' 20 5 12 6 red <<'EOF'
 --- 20x5 cursor 0,1 history 0 alt 0

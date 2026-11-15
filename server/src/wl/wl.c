@@ -24,6 +24,8 @@
  * wp_security_context_manager_v1 (secctx.c): a sandbox's own socket; its clients count as sandboxed and don't
  * see the globals only trusted clients get. */
 #include "wl.h"
+#include "../mousebuttons.h"
+#include "../ui/grab.h"
 #include "keygrab.h"
 #include "secctx.h"
 #include "kbinhibit.h"
@@ -201,6 +203,7 @@ static struct wl_list pointers, keyboards, data_devices, outputs;
 
 static Surf *pointer_focus, *key_focus;
 static int buttons_held;
+static int window_press_allowed(struct wl_client *client, uint32_t serial);
 static float last_x, last_y, press_x, press_y;     /* where it was pressed: base for move/resize */
 static uint32_t mods_sent[4];
 
@@ -2367,12 +2370,14 @@ static void top_menu(struct wl_client *c, struct wl_resource *r, struct wl_resou
     emit(s, "menu", "{\"x\":%.0f,\"y\":%.0f}", ox + (float)x, oy + (float)y);
 }
 static void top_move(struct wl_client *c, struct wl_resource *r, struct wl_resource *seat, uint32_t serial) {
-    (void)c; (void)seat; (void)serial;
+    (void)seat;
+    if (!window_press_allowed(c, serial)) return;
     Surf *s = wl_resource_get_user_data(r);
     if (s && s->mapped) { buttons_held = 0; emit(s, "move", "{\"x\":%.0f,\"y\":%.0f}", press_x, press_y); }
 }
 static void top_resize(struct wl_client *c, struct wl_resource *r, struct wl_resource *seat, uint32_t serial, uint32_t edges) {
-    (void)c; (void)seat; (void)serial;
+    (void)seat;
+    if (!window_press_allowed(c, serial)) return;
     Surf *s = wl_resource_get_user_data(r);
     if (s && s->mapped) { buttons_held = 0; emit(s, "resize", "{\"edges\":%u,\"x\":%.0f,\"y\":%.0f}", edges, press_x, press_y); }
 }
@@ -3378,8 +3383,18 @@ static int seat_held;                   /* buttons down, wherever they were pres
 static int shift_down;                  /* Shift held: a Files drag into a Linux app may move (it copies otherwise) */
 /* the press a start_drag may name: its serials (one per wl_pointer of that client) and the surface it went to */
 static uint32_t press_serials[4];
+static int press_buttons[4];
 static int npress;
 static Surf *press_surf;
+
+/* A side-button serial is still valid for client input and data drag-and-drop,
+ * but must not authorize an interactive window move/resize (including JS fallback). */
+static int window_press_allowed(struct wl_client *client, uint32_t serial) {
+    if (!grab_can_begin() || !press_surf || press_surf->client != client) return 0;
+    for (int i = 0; i < npress; i++)
+        if (press_serials[i] == serial) return press_buttons[i] >= 0 && press_buttons[i] <= 2;
+    return 0;
+}
 /* LordOS's paths (wl_drag_files): kept after the drop for the offer reading them */
 static char *lord_uris, *lord_text;
 static size_t lord_uris_len, lord_text_len;
@@ -3972,9 +3987,13 @@ int wl_pointer(float x, float y, Node *hit, int moved, int nbuttons, const int *
             wl_pointer_send_motion(p, t, wl_fixed_from_double(lx), wl_fixed_from_double(ly));
         for (int i = 0; i < nbuttons; i++) {
             if (held && down[i]) continue;
-            uint32_t b = button[i] == 0 ? BTN_LEFT : button[i] == 1 ? BTN_MIDDLE : BTN_RIGHT;
+            int b = mouse_button_to_evdev(button[i]);
+            if (b < 0) continue;
             uint32_t serial = input_serial(target->client);
-            if (down[i] && npress < (int)(sizeof press_serials / sizeof *press_serials)) press_serials[npress++] = serial;
+            if (down[i] && npress < (int)(sizeof press_serials / sizeof *press_serials)) {
+                press_buttons[npress] = button[i];
+                press_serials[npress++] = serial;
+            }
             wl_pointer_send_button(p, serial, t, b, down[i] ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
         }
         if (wheel) wl_input_wheel(p, t, wheel);      /* axis + axis_source wheel + value120 (wl_input.c) */

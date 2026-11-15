@@ -23,9 +23,10 @@ typedef struct {
 /* main.c: where the pointer is and which buttons are pressed (mask, bit = DOM button). */
 void grab_note_pointer(float x, float y, int buttons);
 /* edges: 0 = move; otherwise xdg edges (1 top, 2 bottom, 4 left, 8 right). Only with a
- * button pressed. 0 if it started. */
+ * primary button (DOM 0, 1 or 2) pressed. 0 if it started. */
 int  grab_begin(int node, int edges, const GrabLimits *lim);
 int  grab_active(void);
+int  grab_can_begin(void);                 /* at least one of DOM buttons 0, 1, 2 is held */
 int  grab_cursor(void);                     /* cursor shape during the drag (cursor.h) */
 /* Where the pointer is now and the drag's edges (0 = moving); 1 while a drag is active. Read by the
  * theme a few times per second for the window snapping preview (lord.wm.pointer, docs/WINDOWS.md). */

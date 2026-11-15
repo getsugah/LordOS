@@ -72,7 +72,7 @@ export function WindowShell({ win, style, children, onMouseDown, resizable = tru
       </View>
       {m > 0 && GRIPS.map(([edges, cursor, at]) => (
         <View key={edges} style={{ position: 'absolute', cursor, ...at(m + INSIDE) }}
-          onMouseDown={(e) => { e.stopPropagation(); wm.focus(win.id); wm.beginResize(win.id, edges); }} />
+          onMouseDown={(e) => { e.stopPropagation(); if (e.button > 2) return; wm.focus(win.id); wm.beginResize(win.id, edges); }} />
       ))}
     </View>
   );
