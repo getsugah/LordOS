@@ -7,7 +7,7 @@
 //   desktopSwipe(dir)                       a registerGestureActions action
 //
 // The animation: the windows arriving slide a little and fade in, on their cached raster, by setting
-// the transform of each one's node (lord.setStyle: no React render per frame). A short timer loop runs
+// the transform of each one's node (lord.setStyle: no React render per frame). A finite frame loop runs
 // only during a switch, and none at all with Reduce motion.
 import { createElement as h } from 'react';
 import { View, Text, mainDisplay } from '@lordos/runtime';
@@ -167,34 +167,41 @@ function showHud() {
 // While it runs: the windows' start offset, read once by WindowShell. Null when idle.
 export const desktopFx = createStore(null);
 let fxTimer = 0;
+const animatedNodes = new Set();
 // lord.setStyle takes native properties: a CSS transform only exists in React styles (runtime/style.js)
 const style = (node, k, v) => { try { lord.setStyle(node, k, v); } catch (e) { /* closed meanwhile */ } };
 
-function endFx(nodes) {
-  clearTimeout(fxTimer);
+function endFx(nodes = []) {
+  if (fxTimer) cancelAnimationFrame(fxTimer);
   fxTimer = 0;
-  for (const n of nodes) { style(n, 'translateX', undefined); style(n, 'opacity', undefined); }
+  for (const n of nodes) animatedNodes.add(n);
+  for (const n of animatedNodes) { style(n, 'translateX', undefined); style(n, 'opacity', undefined); }
+  animatedNodes.clear();
   desktopFx.set(null);
 }
 function animate(step) {
-  endFx([]);
+  endFx();
   if (settings.get().reduceMotion || overviewShowing.get() || typeof lord === 'undefined') return;
   const dx = step * FX_SLIDE * (direction() === 'rtl' ? -1 : 1);
-  const t0 = Date.now();
+  const t0 = performance.now();
   desktopFx.set({ transform: `translate(${dx}px, 0px)`, opacity: 0 });
-  const tick = () => {
+  const tick = (now) => {
     const nodes = visibleOn(windows.get(), activeDesktop.get()).map((w) => fxNodes.get(w.id)).filter(Boolean);
-    const p = Math.min(1, (Date.now() - t0) / FX_MS);
+    const p = Math.max(0, Math.min(1, (now - t0) / FX_MS));
     if (p >= 1) { endFx(nodes); return; }
     const e = 1 - (1 - p) * (1 - p) * (1 - p);        // ease-out
     for (const n of nodes) {
+      animatedNodes.add(n);
       style(n, 'translateX', +(dx * (1 - e)).toFixed(1));
       style(n, 'opacity', +e.toFixed(3));
     }
-    fxTimer = setTimeout(tick, 16);
+    fxTimer = requestAnimationFrame(tick);
   };
-  fxTimer = setTimeout(tick, 16);
+  fxTimer = requestAnimationFrame(tick);
 }
+
+// Changing the preference also stops an animation already in flight.
+settings.subscribe(() => { if (settings.get().reduceMotion) endFx(); });
 
 let shown = activeDesktop.get();
 activeDesktop.subscribe(() => {

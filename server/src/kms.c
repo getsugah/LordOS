@@ -539,6 +539,7 @@ static uint32_t cursor_cap(int fd, uint64_t cap) {
 }
 
 int kms_cursor_image(Kms *k, const uint32_t *argb, int w, int h, int hot_x, int hot_y) {
+    int visible = k->cursor_visible; /* allocation alone must not show an inactive output's cursor */
     if (!k->cursor_handle) {
         uint32_t cw = cursor_cap(k->fd, DRM_CAP_CURSOR_WIDTH), ch = cursor_cap(k->fd, DRM_CAP_CURSOR_HEIGHT);
         struct drm_mode_create_dumb c = { .width = cw, .height = ch, .bpp = 32 };
@@ -562,10 +563,15 @@ int kms_cursor_image(Kms *k, const uint32_t *argb, int w, int h, int hot_x, int 
     for (int y = 0; y < h && y < (int)k->cursor_h; y++)
         for (int x = 0; x < w && x < (int)k->cursor_w; x++) k->cursor_map[(size_t)y * k->cursor_pitch + x] = argb[(size_t)y * w + x];
     struct drm_mode_cursor2 c = { .flags = DRM_MODE_CURSOR_BO, .crtc_id = k->crtc_id, .width = k->cursor_w, .height = k->cursor_h,
-                                  .handle = k->cursor_handle, .hot_x = hot_x, .hot_y = hot_y };
-    k->cursor_ok = xioctl(k->fd, DRM_IOCTL_MODE_CURSOR2, &c) == 0;
-    k->cursor_visible = k->cursor_ok;
-    return k->cursor_ok ? 0 : -1;
+                                  .handle = visible ? k->cursor_handle : 0, .hot_x = hot_x, .hot_y = hot_y };
+    /* Updating an image must not resurrect a plane hidden on another output.
+     * A failed ioctl leaves the previously known hardware state unchanged. */
+    if (xioctl(k->fd, DRM_IOCTL_MODE_CURSOR2, &c)) return -1;
+    k->cursor_ok = 1;
+    k->cursor_visible = visible;
+    k->cursor_hot_x = hot_x;
+    k->cursor_hot_y = hot_y;
+    return 0;
 }
 
 int kms_cursor_fits(const Kms *k, int w, int h) {
@@ -581,9 +587,9 @@ void kms_cursor_move(Kms *k, int x, int y) {
 void kms_cursor_show(Kms *k, int visible) {
     if (!k->cursor_ok || k->cursor_visible == visible) return;
     struct drm_mode_cursor2 c = { .flags = DRM_MODE_CURSOR_BO, .crtc_id = k->crtc_id, .width = k->cursor_w, .height = k->cursor_h,
-                                  .handle = visible ? k->cursor_handle : 0 };
-    xioctl(k->fd, DRM_IOCTL_MODE_CURSOR2, &c);
-    k->cursor_visible = visible;
+                                  .handle = visible ? k->cursor_handle : 0,
+                                  .hot_x = k->cursor_hot_x, .hot_y = k->cursor_hot_y };
+    if (!xioctl(k->fd, DRM_IOCTL_MODE_CURSOR2, &c)) k->cursor_visible = visible;
 }
 
 /* ---- Settings → Displays: change the mode at runtime, gamma, DPMS ---- */

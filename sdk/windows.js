@@ -103,21 +103,21 @@ export function closeDesktop(id) {
   const { state, target } = removeDesktop(desktopState(), id);
   if (target == null) return false;
   windows.set((ws) => ws.map((w) => ((w.desktop ?? FIRST_DESKTOP) === id ? { ...w, desktop: target } : w)));
-  if (desktopNames.get()[id]) desktopNames.set(withName(desktopNames.get(), id, ''));
+  if (desktopNames.get()[id]) desktopNames.set((names) => withName(names, id, ''));
   desktopList.set(state.list);
   activeDesktop.set(state.active);
   return true;
 }
 // Exactly `list`, in that order (a new session, sdk/desktops.js): no window is on any other desktop yet.
 export function setDesktops(list, active, names = {}) {
-  desktopNames.set(names);
+  desktopNames.set(() => names);
   desktopList.set(list);
   activeDesktop.set(active);
 }
 // Its own name, or the default by position. An empty name goes back to the default.
 export const desktopName = (id) => desktopNames.get()[id] || t('shell.desktops.name', { n: desktopList.get().indexOf(id) + 1 });
 export function renameDesktop(id, name) {
-  if (desktopList.get().includes(id)) desktopNames.set(withName(desktopNames.get(), id, name));
+  if (desktopList.get().includes(id)) desktopNames.set((names) => withName(names, id, name));
 }
 // To another position in the list; its windows go with it (they name the desktop, not a position).
 export function moveDesktop(id, index) {

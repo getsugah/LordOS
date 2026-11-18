@@ -3,6 +3,7 @@
 import { View, Text, addListener, displayFor, onCommit, onScreenChange, capsLock } from '@lordos/runtime';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useTheme } from './theme.js';
+import { useAnimatedStyle } from './microanimation-hooks.js';
 import { getApp, windows, openedAt, wm, activeDesktop, onActiveDesktop } from './windows.js';
 import { onDesktop } from './desktopmodel.js';
 import { useStore } from './store.js';
@@ -30,15 +31,21 @@ import { wheelValue } from './controlmodel.js';
 export function Button({ label, onClick, primary, style, small, plain, disabled, destructive, icon, focusable = true }) {
   const t = useTheme();
   const [hover, setHover] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const button = useRef(null);
+  const opacity = disabled ? 0.4 : pressed ? 0.72 : hover && !plain ? 0.85 : 1;
+  // Keep caller-supplied styles authoritative, including explicit opacity.
+  const ownOpacity = (Array.isArray(style) ? style.flat(Infinity) : [style]).reduce((value, s) => s?.opacity ?? value, undefined);
+  useAnimatedStyle(button, 'opacity', ownOpacity ?? opacity, !!t.reduceMotion || pressed || !!disabled || ownOpacity != null, 90);
   const fg = primary ? '#fff' : destructive ? '#ff453a' : t.text;
   const bg = primary ? t.accent : plain ? (hover && !disabled ? t.hover : 'transparent') : t.control;
   const border = t.buttonBorder && !plain ? { border: `1px solid ${primary ? t.accent : t.separator}` } : null;
   return (
-    <View onClick={disabled ? undefined : onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <View ref={button} onClick={disabled ? undefined : onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setPressed(false); }}
+      onMouseDown={(e) => { if (!disabled && e.button === 0) setPressed(true); }} onMouseUp={() => setPressed(false)}
       focusable={focusable && !disabled}
       style={[{ height: small ? 22 : 28, paddingHorizontal: small ? 10 : 14, borderRadius: small ? t.controlRadiusSmall : t.controlRadius, flexDirection: 'row', gap: 6,
-        justifyContent: 'center', alignItems: 'center', backgroundColor: bg, ...border,
-        opacity: disabled ? 0.4 : hover && !plain ? 0.85 : 1 }, style]}>
+        justifyContent: 'center', alignItems: 'center', backgroundColor: bg, ...border }, style]}>
       {icon ? <Text style={{ fontSize: small ? 12 : 14, color: fg }}>{icon}</Text> : null}
       {label != null && label !== '' ? <Text style={{ fontSize: small ? 12 : 13, fontWeight: 500, color: fg, whiteSpace: 'nowrap' }}>{label}</Text> : null}
     </View>
@@ -50,10 +57,12 @@ export function Button({ label, onClick, primary, style, small, plain, disabled,
 export function Toggle({ on, onChange, small, focusable = true }) {
   const t = useTheme();
   const w = small ? 36 : 42, h = small ? 20 : 24, k = h - 4;
+  const knob = useRef(null);
+  useAnimatedStyle(knob, 'translateX', on ? w - k - 4 : 0, !!t.reduceMotion, 120);
   return (
     <View onClick={() => onChange(!on)} focusable={focusable} style={{ width: w, height: h, borderRadius: h / 2, direction: 'ltr',
       backgroundColor: on ? t.accent : t.control }}>
-      <View style={{ position: 'absolute', top: 2, left: on ? w - k - 2 : 2, width: k, height: k, borderRadius: k / 2,
+      <View ref={knob} style={{ position: 'absolute', top: 2, left: 2, width: k, height: k, borderRadius: k / 2,
         backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.35)' }} />
     </View>
   );

@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, addListener } from '@lordos/runtime';
 import { useTheme } from './theme.js';
+import { useAnimatedStyle } from './microanimation-hooks.js';
 import { direction } from './i18n.js';
 import { takeTextFocus, releaseTextFocus, focusToken, restoreFocus, textFocusOwner } from './components.jsx';
 import { SUB_DELAY, SUB_GRACE, selectable, stepIndex, edgeIndex, menuAction, typeAhead, matchIndex, subPlace, aiming } from './menunav.js';
@@ -28,6 +29,7 @@ const boxAt = (items, x, y, width, bounds) => ({
 
 function MenuBox({ items, left, top, width, active, onRow, onPick, onMove, onEnter, onDown, boxRef }) {
   const t = useTheme();
+  useAnimatedStyle(boxRef, 'opacity', 1, !!t.reduceMotion, 100, 0);
   return (
     <View ref={boxRef} onMouseDown={onDown} onMouseMove={onMove} onMouseEnter={onEnter} style={{ position: 'absolute', left, top, width, paddingVertical: 5, borderRadius: 8, backgroundColor: t.mode === 'dark' ? '#2c2c31' : '#ffffff',
       border: `1px solid ${t.separator}`, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>

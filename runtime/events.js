@@ -76,6 +76,14 @@ function run(p, fn) {
 }
 
 globalThis.__lordEvent = (type, id, x, y, button) => {
+  // Side buttons navigate without acting as primary presses or altering click tracking.
+  if ((button === 3 || button === 4) && (type === 'down' || type === 'up')) {
+    if (type === 'down') run(DiscreteEventPriority, () => {
+      const chain = chainOf(id);
+      dispatch(chain, 'onNavigate', makeEvent('navigate', chain[0] || null, x, y, button, { direction: button === 3 ? 'back' : 'forward' }));
+    });
+    return;
+  }
   const chain = chainOf(id);
   const target = chain[0] || null;
   const fire = (set, ev) => { for (const fn of listeners[set]) fn(ev); };

@@ -60,7 +60,7 @@ function PoofFade() {
   const poof = useStore(dockPoof);
   const reduce = !!useStore(settings).reduceMotion;
   const [, tick] = useState(0);
-  const p = poof ? Math.min(1, (Date.now() - poof.t0) / 300) : 1;
+  const p = poof ? Math.min(1, (performance.now() - poof.t0) / 300) : 1;
   useEffect(() => {
     if (!poof || p >= 1 || reduce) return undefined;
     const raf = requestAnimationFrame(() => tick((n) => n + 1));

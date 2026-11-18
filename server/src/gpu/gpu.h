@@ -45,6 +45,9 @@ int  gpu_device(dev_t *dev);
 
 /* Textures: from premultiplied ARGB pixels (shm) or from a dmabuf (EGLImage). */
 GpuTex *gpu_tex_pixels(GpuTex *t, const uint32_t *px, int w, int h, int opaque);
+/* Update a retained pixel texture in buffer coordinates; new/resized/stale
+ * storage is always filled completely. px still describes the whole image. */
+GpuTex *gpu_tex_pixels_damage(GpuTex *t, const uint32_t *px, int w, int h, int opaque, Rect damage);
 GpuTex *gpu_tex_dmabuf(const GpuDmabuf *d);
 void    gpu_tex_free(GpuTex *t);
 
@@ -107,10 +110,11 @@ int  gpu_frame_ex(int out, const Canvas *scene, const Rect *dmg, int n, const Gp
  * UI, no app window, menu or cursor, so it may redraw only what changed. Asked before every frame; unset, it is
  * composed whole. */
 void gpu_scissor_quiet(int out, int quiet);
-int  gpu_gdrag_holds(int out);             /* the GPU drag textures hold that output's last upload, in this context */
+int  gpu_gdrag_holds(int out);             /* that output's independent GPU drag pair has storage, in this context */
 /* Texture which (0 the copy of what is below, 1 the layer) of output out gets r of px (w × h, stride w),
- * between frames (paint_gdrag_feed's up). 1: it held nothing of that output at that size: it is now that
- * output's, and the caller sends all of it again; 0 sent; -1 failed (GPU drag is then off). */
+ * between frames (paint_gdrag_feed's up). Each output retains its own pair, allocated lazily.
+ * 1: storage was created/resized, and the caller sends all of it again; 0 sent;
+ * -1 failed (GPU drag is then off). Dirty/completeness bookkeeping stays in paint.c. */
 int  gpu_gdrag_feed(int out, int which, const uint32_t *px, int w, int h, Rect r);
 /* Where the last gpu_frame_ex of an output spent its time (LordBench's frame phases, bench/lbframes.h) */
 typedef struct {
@@ -136,6 +140,9 @@ void gpu_gdrag_stats(long *below_px, long *layer_px, long *quads);
 int  gpu_add_output(Kms *k);
 void gpu_draw(GpuTex *t, float dx, float dy, float dw, float dh,
               float sx, float sy, float sw, float sh, Rect clip, float opacity);
+/* Crop in transformed buffer coordinates, before buffer scale. */
+void gpu_draw_transform(GpuTex *t, float dx, float dy, float dw, float dh,
+                        float sx, float sy, float sw, float sh, Rect clip, float opacity, int transform);
 
 /* The remote desktop's copy of the next composed frame (docs/REMOTE.md, "Video (WebRTC)"): the
  * next gpu_frame of a w×h display reads the whole frame back into px (0xAARRGGBB, rows top to

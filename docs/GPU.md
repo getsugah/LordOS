@@ -193,13 +193,20 @@ on the CPU inside the call, so the first GPU drag frame after such a change miss
   (`glTexImage2D` with no data), marked as that display's, and all of it is sent in slices. Only frames refused for
   `GDRAG_R_FEED` send slices: sent while GPU drag is refused for another reason (the menu bar or the Dock in the damage),
   most of it would change again before it is used (`engine-test`: 162.8 million pixels against 2.4 million).
-- Each texture knows whose pixels it holds (`gdragtout[2]`); a GPU drag frame that would find another display's or the
-  wrong size still sends all of it (correct, and rare now). The dirty list keeps `GDRAG_DIRTY` (16) rectangles and,
+- Each output retains its own lazy `DragTextures` pair. Uploading on another head no longer evicts its pixels or
+  prevents replay of a still-visible drag quad. A new size still needs a full upload. The dirty list keeps `GDRAG_DIRTY` (16) rectangles and,
   when full, merges the two whose box adds the fewest pixels (it used to grow the last one).
 - The textures are only written at a frame's submission and in the catch-up right after it, never between a frame's
   paint and its upload: with the frame pipeline (below) the next frame is painted ahead into the CPU's scene only, and
   its uploads wait for its submission. GL orders those writes after the draws that read the textures, so no second
   copy of them is kept. GLES3 pixel buffers (the GPU doing the tiling) are not used.
+
+The per-output pairs live until their output/context is torn down. Their extra storage is four bytes per pixel
+of the below-copy and dragged layer for each output that has used GPU drag. They do not make paint.c's shared
+CPU layer independent per output, or enable the frame pipeline on several heads. An explicit offscreen integration
+test, `make -C server test-gpu-multioutput`, exercises the production GLES code, alternates outputs of different
+sizes, checks replay pixels and partial uploads, and verifies that a resize or release affects only its own pair.
+It needs GBM/EGL/GLES development headers and Mesa surfaceless EGL; it does not modeset a display.
 
 `engine-test`'s stub GPU does the same as `main.c` and `gpu.c` (a texture made again is filled with a pattern no
 frame has, so a pixel the slices missed shows): every frame matches, and it checks that no GPU drag frame has more than
@@ -227,6 +234,7 @@ composed by the CPU`, and no self-test runs.
 | Switch | Effect |
 |---|---|
 | `LORD_GPU_DRAG=0` | GPU drag off: the dragged window is painted by the CPU as before |
+| `LORD_GPU_DRAG_FEED=1..4` | Post-submit upload budget multiplier. Default 1 (262,144 pixels). Higher values can warm the drag textures in fewer frames at the cost of more time spent uploading after each submission. The pre-submit budget stays fixed. |
 | unset or anything else | GPU drag on wherever its self-test passes (the default) |
 | `LORD_GPU_VERIFY=N` | every N-th GPU drag frame W is also painted on the CPU (a walk clipped to W on a scratch canvas) and compared with the framebuffer read back: `gpu-verify: frame N W=wxh differ=K worst=D` |
 

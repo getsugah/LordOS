@@ -10,6 +10,7 @@ import {
   mainDisplay, direction, compareNames,
 } from '@lordos/sdk';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePanelEntrance } from '../../../sdk/microanimation-hooks.js';
 import { Menu } from './Menu.jsx';
 import { PowerGlyph, Chevron, FolderGlyph, PageGlyph, GearGlyph, SearchGlyph } from '../glyphs.jsx';
 import { BAR_H, BAR_W } from './Taskbar.jsx';
@@ -88,6 +89,7 @@ function resultGlyph(t, it, sectionId) {
 // box: the panel's place ({ left, top, width, height }, global coordinates)
 export function StartMenu({ t, box, onClose, isOnBar }) {
   const ref = useRef(null);
+  usePanelEntrance(ref);
   const menuRef = useRef(null);                        // the open context or power menu (a portal, outside ref)
   const list = useLauncherApps();
   const [s] = useSettings();

@@ -182,6 +182,10 @@ export function openEntry(e, ctx) {
   // archives (M9): browsed like a folder; what is inside is extracted to the cache when opened
   if (e.arc) { if (e.dir) ctx.navigate({ type: 'archive', path: e.arc.file, inner: e.arc.inner }); else ctx.openArc(e); return; }
   if (e.dir) { ctx.navigate({ type: 'dir', path: e.path }); return; }
+  if (!e.trash && !fs.isRemote(e.path) && /\.appimage$/i.test(e.name)) {
+    try { lord.fs.appImage(e.path); } catch (err) { ctx.reportError(err); }
+    return;
+  }
   if (!e.trash && archive.isArchive(e.name)) { ctx.navigate({ type: 'archive', path: e.path, inner: '' }); return; }
   const { list, off } = openersOf(e, ctx.linuxApps, ctx.t);
   // only a deactivated LordOS app opens it (Photos, PDF Viewer…): the notice offers to activate it

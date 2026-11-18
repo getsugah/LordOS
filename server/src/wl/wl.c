@@ -24,6 +24,8 @@
  * wp_security_context_manager_v1 (secctx.c): a sandbox's own socket; its clients count as sandboxed and don't
  * see the globals only trusted clients get. */
 #include "wl.h"
+#include "../gpu/gscissor.h"
+#include "../buffertransform.h"
 #include "../mousebuttons.h"
 #include "../ui/grab.h"
 #include "keygrab.h"
@@ -112,6 +114,8 @@ struct Surf {
     struct wl_resource *p_buf;
     struct wl_listener p_buf_destroy;
     int p_attached, p_gx, p_gy, p_gw, p_gh, p_geom;
+    Rect p_buffer_damage;
+    int p_surface_damage;
     struct wl_list p_frames, frames;
     /* current */
     uint32_t *px;
@@ -137,13 +141,19 @@ struct Surf {
     /* subsurface */
     int sx, sy, p_sx, p_sy;
     Surf *kids[16];
-    int nkids;
+    Surf *p_kids[16];             /* pending order, applied by the parent's commit */
+    int nkids, nbelow, p_nbelow;   /* children before this index are below the parent */
+    int sub_sync;
+    Surf *cached;                 /* committed subsurface state, never pending requests */
+    int cache_x[16], cache_y[16];  /* positions accompanying cached kids/order */
     int node;                   /* UI node that shows it (windows) */
     /* content: shm buffer copied into px, or dmabuf in use (GPU path) */
     int content;
     Dmabuf *dmabuf;
     GpuTex *tex;                /* uploaded px (GPU path) */
-    int tex_dirty;
+    int tex_dirty;              /* 1: full upload, 2: tex_damage only */
+    Rect tex_damage;
+    int shm_valid;              /* px is a complete copy of the last SHM content */
     int lw, lh;                 /* logical size (viewporter; otherwise the buffer's) */
     /* wp_viewporter: pending and current (vsw < 0 = no crop, vdw <= 0 = no scaling) */
     struct wl_resource *viewport;
@@ -165,6 +175,9 @@ struct Surf {
      * enter/leave, bit = output slot) and the scale it should render at (fractional-scale-v1,
      * preferred_buffer_scale) */
     int bscale, p_bscale;
+    int transform, p_transform;
+    uint32_t *oriented;
+    int oriented_dirty;
     struct wl_resource *frac;
     unsigned outmask;
     int pref_scale;
@@ -181,8 +194,8 @@ struct Surf {
 
 /* Shape of a surface's hole in the UI: if it changes, the UI must be repainted. */
 static unsigned hole_sig(const Surf *s) {
-    return (unsigned)s->lw * 2654435761u ^ (unsigned)s->lh * 40503u ^ (unsigned)(s->gx + 7 * s->gy) * 97u ^
-           (unsigned)(s->gw * 13 + s->gh) * 31u ^ (unsigned)(s->sx * 5 + s->sy) ^ (unsigned)s->content << 30;
+    return (unsigned)s->lw * 2654435761u ^ (unsigned)s->lh * 40503u ^ ((unsigned)s->gx + 7u * (unsigned)s->gy) * 97u ^
+           ((unsigned)s->gw * 13u + (unsigned)s->gh) * 31u ^ ((unsigned)s->sx * 5u + (unsigned)s->sy) ^ (unsigned)s->content << 30;
 }
 
 #define MAX_SURF 256
@@ -229,6 +242,14 @@ static int fs_slot = -1;                /* the display it covers (output slot), 
 static void fs_rect(float *x, float *y, float *w, float *h) {
     if (fs_slot >= 0 && fs_slot < OUT_MAX && oslots_used(fs_slot)) { oslot_rect(fs_slot, x, y, w, h); return; }
     *x = 0; *y = 0; *w = ui.width; *h = ui.height;
+}
+
+/* Fullscreen captures input only on the output it covers. */
+static int fullscreen_at(float x, float y) {
+    if (!fs_surf || !fs_surf->content) return 0;
+    float fx, fy, fw, fh;
+    fs_rect(&fx, &fy, &fw, &fh);
+    return x >= fx && y >= fy && x < fx + fw && y < fy + fh;
 }
 
 /* cursor of the app with the pointer: 0 LordOS arrow, 1 app image, 2 hidden */
@@ -328,7 +349,7 @@ int wl_content_take(float *x0, float *y0, float *x1, float *y1) {
     return 1;
 }
 
-static void damage_node(Surf *s) {
+static void damage_node_mode(Surf *s, int structural) {
     Surf *top = s;
     while (top->parent && top->role != R_TOPLEVEL) top = top->parent;
     if (content_on) {               /* a menu or a fullscreen app may be anywhere: all of it */
@@ -337,11 +358,14 @@ static void damage_node(Surf *s) {
         else content_note(tn->prev_box);
     }
     /* GPU path: if only the content changed, presenting again is enough */
-    if (gpu_active() && (top->role == R_POPUP || top == fs_surf || hole_sig(s) == s->hole_sig)) { need_frame = 1; return; }
+    if (!structural && gpu_active() && (top->role == R_POPUP || top == fs_surf || hole_sig(s) == s->hole_sig)) { need_frame = 1; return; }
     Node *n = top->node ? node_get(top->node) : NULL;
     if (n && n->prev_box.x1 > n->prev_box.x0) damage_add(n->prev_box);
+    else if (structural) damage_add((Box){ 0, 0, ui.width, ui.height });
     ui.dirty = 1;
+    if (structural) need_frame = 1;
 }
+static void damage_node(Surf *s) { damage_node_mode(s, 0); }
 
 /* On-screen origin of a surface's buffer (window or menu). 0 if unknown. */
 static int origin(Surf *s, float *x, float *y) {
@@ -442,6 +466,7 @@ static void buffer_destroyed(struct wl_listener *l, void *data) {
 static void copy_buffer(Surf *s, struct wl_resource *buf) {
     struct wl_shm_buffer *b = buf ? wl_shm_buffer_get(buf) : NULL;
     if (!b) {                               /* no buffer (or one that is not shared memory) */
+        s->shm_valid = 0;
         free(s->px);
         s->px = NULL;
         s->w = s->h = 0;
@@ -453,6 +478,12 @@ static void copy_buffer(Surf *s, struct wl_resource *buf) {
     int w = wl_shm_buffer_get_width(b), h = wl_shm_buffer_get_height(b), stride = wl_shm_buffer_get_stride(b);
     uint32_t fmt = wl_shm_buffer_get_format(b);
     if (w <= 0 || h <= 0 || w > 8192 || h > 8192) { wl_buffer_send_release(buf); return; }
+    int opaque = fmt == WL_SHM_FORMAT_XRGB8888;
+    Rect dirty = s->p_buffer_damage;
+    int partial = s->shm_valid && s->px && s->w == w && s->h == h && s->opaque == opaque &&
+                  !s->p_surface_damage && dirty.x1 > dirty.x0 && dirty.y1 > dirty.y0;
+    if (!partial) dirty = (Rect){ 0, 0, w, h };
+    else dirty = gsc_clip(dirty, w, h);
     if (w != s->w || h != s->h || !s->px) {
         uint32_t *np = realloc(s->px, (size_t)w * (size_t)h * 4);
         if (!np) { wl_buffer_send_release(buf); return; }
@@ -460,16 +491,23 @@ static void copy_buffer(Surf *s, struct wl_resource *buf) {
         s->w = w;
         s->h = h;
     }
-    s->opaque = fmt == WL_SHM_FORMAT_XRGB8888;
+    s->opaque = opaque;
     wl_shm_buffer_begin_access(b);
     const uint8_t *d = wl_shm_buffer_get_data(b);
-    for (int y = 0; y < h; y++) {
+    for (int y = dirty.y0; y < dirty.y1; y++) {
         uint32_t *dst = s->px + (size_t)y * w;
-        memcpy(dst, d + (size_t)y * stride, (size_t)w * 4);
-        if (s->opaque) for (int x = 0; x < w; x++) dst[x] |= 0xff000000u;
+        memcpy(dst + dirty.x0, d + (size_t)y * stride + (size_t)dirty.x0 * 4, (size_t)(dirty.x1 - dirty.x0) * 4);
+        if (s->opaque) for (int x = dirty.x0; x < dirty.x1; x++) dst[x] |= 0xff000000u;
     }
     wl_shm_buffer_end_access(b);
     wl_buffer_send_release(buf);
+    s->shm_valid = 1;
+    s->oriented_dirty = 1;
+    if (!partial || s->tex_dirty == 1) s->tex_dirty = 1;
+    else {
+        s->tex_damage = s->tex_dirty == 2 ? gsc_join(s->tex_damage, dirty) : dirty;
+        s->tex_dirty = 2;
+    }
 }
 
 /* ---- dmabuf ---- */
@@ -534,18 +572,31 @@ static int map_linear(Surf *s, Dmabuf *d) {
     sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
     ioctl(g->fd[0], DMA_BUF_IOCTL_SYNC, &sync);
     munmap(m, size);
+    s->oriented_dirty = 1;
     return 0;
+}
+
+static void release_dm_reference(Dmabuf *d) {
+    /* The resource plus this retiring reference must be the only owners.
+     * A visible surface, a synchronized cache or a scanout may still use it. */
+    if (d->res && !d->scanned && d->refs == 2) wl_buffer_send_release(d->res);
+    dm_unref(d);
 }
 
 static void queue_release(Dmabuf *d) {
     if (nrelease < 64) { to_release[nrelease++] = d; return; }
-    if (d->res && !d->scanned) wl_buffer_send_release(d->res);
-    dm_unref(d);
+    release_dm_reference(d);
+}
+
+static void release_retired_buffers(void) {
+    for (int i = 0; i < nrelease; i++) release_dm_reference(to_release[i]);
+    nrelease = 0;
 }
 
 /* The buffer the app just sent becomes the surface's content. */
 static void take_buffer(Surf *s, struct wl_resource *buf) {
     Dmabuf *dm = dmabuf_of(buf), *old = s->dmabuf;
+    if (dm || old) s->shm_valid = 0;
     s->dmabuf = NULL;
     if (dm && s->role != R_CURSOR && dm_tex(dm)) {
         dm->refs++;
@@ -559,7 +610,7 @@ static void take_buffer(Surf *s, struct wl_resource *buf) {
     } else if (dm && map_linear(s, dm) == 0) {
         s->content = 1;
         s->tex_dirty = 1;
-        wl_buffer_send_release(buf);
+        if (!dm->scanned && dm->refs == 1) wl_buffer_send_release(buf);
     } else if (dm && !gpu_active() && s->role != R_CURSOR) {
         /* Off the GPU (the session left the monitor, or a remote viewer) with a buffer the CPU
          * can't read (tiled, or a driver that doesn't map it): keep showing the last good frame
@@ -573,10 +624,9 @@ static void take_buffer(Surf *s, struct wl_resource *buf) {
         free(s->px);
         s->px = NULL;
         s->w = s->h = 0;
-        wl_buffer_send_release(buf);
+        if (!dm->scanned && dm->refs == 1) wl_buffer_send_release(buf);
     } else {
         copy_buffer(s, buf);
-        s->tex_dirty = 1;
     }
     if (old) queue_release(old);
 }
@@ -588,9 +638,13 @@ static void apply_viewport(Surf *s) {
         s->vdw = s->p_vdw; s->vdh = s->p_vdh;
         s->p_vp = 0;
     }
-    if (s->viewport && s->vdw > 0 && s->vdh > 0) { s->lw = s->vdw; s->lh = s->vdh; }
-    else if (s->viewport && s->vsw > 0 && s->vsh > 0) { s->lw = (int)s->vsw; s->lh = (int)s->vsh; }
-    else { int b = s->bscale > 0 ? s->bscale : 1; s->lw = s->w / b; s->lh = s->h / b; }
+    if (s->vdw > 0 && s->vdh > 0) { s->lw = s->vdw; s->lh = s->vdh; }
+    else if (s->vsw > 0 && s->vsh > 0) { s->lw = (int)s->vsw; s->lh = (int)s->vsh; }
+    else {
+        int b = s->bscale > 0 ? s->bscale : 1, w, h;
+        buffer_transform_size(s->transform, s->w, s->h, &w, &h);
+        s->lw = w / b; s->lh = h / b;
+    }
     if (xw_scaled(s->client)) { s->lw = xws_from_x(s->lw, xw_pct); s->lh = xws_from_x(s->lh, xw_pct); }   /* an X window */
 }
 
@@ -604,7 +658,7 @@ static void srf_destroy(struct wl_client *c, struct wl_resource *r) { (void)c; w
 static void srf_attach(struct wl_client *c, struct wl_resource *r, struct wl_resource *buf, int32_t x, int32_t y) {
     (void)c;
     Surf *s = wl_resource_get_user_data(r);
-    if (wl_resource_get_version(r) < 5) { s->p_dnd_x += x; s->p_dnd_y += y; }   /* from version 5 that is wl_surface.offset */
+    if (wl_resource_get_version(r) < 5 && s->role != R_SUB) { s->p_dnd_x += x; s->p_dnd_y += y; }   /* from version 5 that is wl_surface.offset */
     if (s->p_buf) { wl_list_remove(&s->p_buf_destroy.link); wl_list_init(&s->p_buf_destroy.link); }
     s->p_buf = buf;
     s->p_attached = 1;
@@ -615,7 +669,20 @@ static void srf_attach(struct wl_client *c, struct wl_resource *r, struct wl_res
 }
 
 static void srf_damage(struct wl_client *c, struct wl_resource *r, int32_t x, int32_t y, int32_t w, int32_t h) {
-    (void)c; (void)r; (void)x; (void)y; (void)w; (void)h;
+    (void)c; (void)x; (void)y;
+    Surf *s = wl_resource_get_user_data(r);
+    if (w > 0 && h > 0) s->p_surface_damage = 1; /* conservative for scale/crop/viewport */
+}
+
+static void srf_damage_buffer(struct wl_client *c, struct wl_resource *r, int32_t x, int32_t y, int32_t w, int32_t h) {
+    (void)c;
+    Surf *s = wl_resource_get_user_data(r);
+    if (w <= 0 || h <= 0) return;
+    /* Clip in 64 bits before conversion: client coordinates may overflow int32. */
+    int64_t right = (int64_t)x + w, bottom = (int64_t)y + h;
+    Rect q = { x < 0 ? 0 : x, y < 0 ? 0 : y, right > 8192 ? 8192 : right < 0 ? 0 : (int)right,
+               bottom > 8192 ? 8192 : bottom < 0 ? 0 : (int)bottom };
+    s->p_buffer_damage = gsc_join(s->p_buffer_damage, q);
 }
 
 static void callback_gone(struct wl_resource *r) { wl_list_remove(wl_resource_get_link(r)); }
@@ -641,18 +708,247 @@ static void srf_input(struct wl_client *c, struct wl_resource *r, struct wl_reso
     s->p_has_input = region != NULL;
 }
 
+static void set_buffer_state(Surf *s, int scale, int transform) {
+    s->bscale = scale;
+    if (s->transform != transform) s->oriented_dirty = 1;
+    s->transform = transform;
+    if (!s->transform) { free(s->oriented); s->oriented = NULL; }
+}
+static void apply_buffer_state(Surf *s) { set_buffer_state(s, s->p_bscale, s->p_transform); }
+
+static int subsurface_synchronized(const Surf *s) {
+    for (; s && s->role == R_SUB; s = s->parent) if (s->sub_sync) return 1;
+    return 0;
+}
+
+static void discard_feedback_list(struct wl_list *list) {
+    struct wl_resource *r, *tmp;
+    wl_resource_for_each_safe(r, tmp, list) {
+        wp_presentation_feedback_send_discarded(r);
+        wl_resource_destroy(r);
+    }
+}
+
+static void sub_cache_destroy(Surf *s) {
+    Surf *c = s->cached;
+    if (!c) return;
+    struct wl_resource *r, *tmp;
+    wl_resource_for_each_safe(r, tmp, &c->frames) wl_resource_destroy(r);
+    discard_feedback_list(&c->feedback);
+    if (c->dmabuf) queue_release(c->dmabuf);
+    free(c->px);
+    wlrgn_free(&c->input);
+    free(c);
+    s->cached = NULL;
+}
+
+/* Copy SHM now (then release it); retain DMA-BUF by reference. Neither content
+ * nor callbacks enter the visible surface until its parent applies this cache.
+ * This Surf is only a state holder, not a registered surface/role/tree node. */
+static int cache_subsurface_commit(Surf *s) {
+    Surf *c = s->cached;
+    if (!c) {
+        c = calloc(1, sizeof *c);
+        if (!c) { wl_client_post_no_memory(s->client); return -1; }
+        c->role = R_SUB;
+        wl_list_init(&c->frames);
+        wl_list_init(&c->feedback);
+        s->cached = c;
+    }
+    if (s->p_attached) {
+        if (!gpu_active() && dmabuf_of(s->p_buf) && !c->px && s->px) {
+            c->px = malloc((size_t)s->w * s->h * sizeof *c->px);
+            if (!c->px) { wl_client_post_no_memory(s->client); return -1; }
+            memcpy(c->px, s->px, (size_t)s->w * s->h * sizeof *c->px);
+            c->w = s->w; c->h = s->h; c->opaque = s->opaque;
+        }
+        c->p_buffer_damage = s->p_buffer_damage;
+        c->p_surface_damage = s->p_surface_damage;
+        take_buffer(c, s->p_buf);
+        c->p_attached = 1; /* cached attachment, including an explicit NULL */
+        if (s->p_buf) { wl_list_remove(&s->p_buf_destroy.link); wl_list_init(&s->p_buf_destroy.link); }
+        s->p_buf = NULL;
+        s->p_attached = 0;
+    } else if (s->p_surface_damage || gsc_area(s->p_buffer_damage)) c->shm_valid = 0;
+    s->p_buffer_damage = (Rect){0};
+    s->p_surface_damage = 0;
+    s->p_dnd_x = s->p_dnd_y = 0; /* wl_surface offsets do not position a subsurface */
+    c->p_bscale = s->p_bscale;
+    c->p_transform = s->p_transform;
+    if (s->p_vp) {
+        c->vsx = s->p_vsx; c->vsy = s->p_vsy; c->vsw = s->p_vsw; c->vsh = s->p_vsh;
+        c->vdw = s->p_vdw; c->vdh = s->p_vdh;
+        c->p_vp = 1;
+        s->p_vp = 0;
+    }
+    if (s->p_input_set) {
+        WlRgn old = c->input;
+        c->input = s->p_input;
+        s->p_input = old;
+        c->has_input = s->p_has_input;
+        c->p_input_set = 1;
+        s->p_input_set = 0;
+    }
+    wl_list_insert_list(c->frames.prev, &s->p_frames); wl_list_init(&s->p_frames);
+    discard_feedback_list(&c->feedback); /* this newer commit supersedes it */
+    wl_list_insert_list(c->feedback.prev, &s->p_feedback); wl_list_init(&s->p_feedback);
+    c->nkids = s->nkids;
+    c->nbelow = s->p_nbelow;
+    memcpy(c->kids, s->p_kids, (size_t)s->nkids * sizeof *s->kids);
+    for (int i = 0; i < c->nkids; i++) {
+        c->cache_x[i] = c->kids[i]->p_sx;
+        c->cache_y[i] = c->kids[i]->p_sy;
+    }
+    return 0;
+}
+
+static int apply_cached_subsurface(Surf *s) {
+    Surf *c = s->cached;
+    if (!c) return 0;
+    unsigned old_signature = hole_sig(s);
+    if (c->p_attached) {
+        /* The GPU may have returned while this commit was cached. A tiled
+         * buffer held during CPU fallback can now replace its old CPU image. */
+        if (c->dmabuf && dm_tex(c->dmabuf)) {
+            const GpuDmabuf *d = &c->dmabuf->d;
+            c->w = d->width; c->h = d->height;
+            c->opaque = d->fourcc == DRM_FORMAT_XRGB8888 || d->fourcc == DRM_FORMAT_XBGR8888;
+            c->content = 1;
+            free(c->px); c->px = NULL;
+        }
+        if (s->dmabuf) queue_release(s->dmabuf);
+        free(s->px);
+        s->px = c->px; c->px = NULL;
+        s->dmabuf = c->dmabuf; c->dmabuf = NULL;
+        s->w = c->w; s->h = c->h; s->opaque = c->opaque; s->content = c->content;
+        s->shm_valid = c->shm_valid;
+        s->tex_dirty = 1;
+        s->oriented_dirty = 1;
+    } else s->shm_valid = 0; /* conservative after damage-only commits */
+    set_buffer_state(s, c->p_bscale, c->p_transform);
+    if (c->p_vp) {
+        s->vsx = c->vsx; s->vsy = c->vsy; s->vsw = c->vsw; s->vsh = c->vsh;
+        s->vdw = c->vdw; s->vdh = c->vdh;
+    }
+    /* Recompute current geometry without consuming newer viewport requests. */
+    int pending_vp = s->p_vp;
+    s->p_vp = 0; apply_viewport(s); s->p_vp = pending_vp;
+    if (c->p_input_set) {
+        WlRgn old = s->input; s->input = c->input; c->input = old;
+        s->has_input = c->has_input;
+    }
+    wl_list_insert_list(s->frames.prev, &c->frames); wl_list_init(&c->frames);
+    discard_feedback_list(&s->feedback); /* older, never submitted content */
+    wl_list_insert_list(s->feedback.prev, &c->feedback); wl_list_init(&c->feedback);
+    /* A child created after the cached parent commit remains topmost; pending
+     * requests issued after that commit must not leak into this application. */
+    Surf *order[16];
+    int n = c->nkids;
+    memcpy(order, c->kids, (size_t)n * sizeof *order);
+    for (int i = 0; i < s->nkids; i++) {
+        int found = 0;
+        for (int j = 0; j < c->nkids; j++) if (s->kids[i] == c->kids[j]) found = 1;
+        if (!found) order[n++] = s->kids[i];
+    }
+    int structural = s->nbelow != c->nbelow || memcmp(s->kids, order, (size_t)n * sizeof *order);
+    memcpy(s->kids, order, (size_t)n * sizeof *order);
+    s->nbelow = c->nbelow;
+    for (int i = 0; i < c->nkids; i++) {
+        if (c->kids[i]->sx != c->cache_x[i] || c->kids[i]->sy != c->cache_y[i]) structural = 1;
+        c->kids[i]->sx = c->cache_x[i];
+        c->kids[i]->sy = c->cache_y[i];
+    }
+    sub_cache_destroy(s);
+    damage_node_mode(s, structural || hole_sig(s) != old_signature);
+    need_frame = 1;
+    return 1;
+}
+
+static void flush_synced_children(Surf *s, int inherited) {
+    for (int i = 0; i < s->nkids; i++) {
+        Surf *k = s->kids[i];
+        if (!inherited && !k->sub_sync) continue;
+        apply_cached_subsurface(k);
+        flush_synced_children(k, 1);
+    }
+}
+
+static void release_desynced_subtree(Surf *s) {
+    if (subsurface_synchronized(s)) return;
+    if (apply_cached_subsurface(s)) flush_synced_children(s, 0);
+    for (int i = 0; i < s->nkids; i++) release_desynced_subtree(s->kids[i]);
+}
+
+/* Returns 1 when the subsurface path consumed the commit, -1 on allocation
+ * failure, 0 for an ordinary independent commit. */
+static int commit_subsurface_state(Surf *s) {
+    if (s->role != R_SUB || (!subsurface_synchronized(s) && !s->cached)) return 0;
+    if (cache_subsurface_commit(s)) return -1;
+    if (!subsurface_synchronized(s)) {
+        apply_cached_subsurface(s);
+        flush_synced_children(s, 0);
+    }
+    return 1;
+}
+
+static int apply_subsurface_state(Surf *s) {
+    int changed = s->nbelow != s->p_nbelow || memcmp(s->kids, s->p_kids, (size_t)s->nkids * sizeof *s->kids);
+    memcpy(s->kids, s->p_kids, (size_t)s->nkids * sizeof *s->kids);
+    s->nbelow = s->p_nbelow;
+    for (int i = 0; i < s->nkids; i++) {
+        Surf *k = s->kids[i];
+        if (k->sx != k->p_sx || k->sy != k->p_sy) changed = 1;
+        k->sx = k->p_sx;
+        k->sy = k->p_sy;
+    }
+    return changed;
+}
+
+/* Destruction preserves both the visible and scheduled stacking order. */
+static void remove_subsurface(Surf *s) {
+    Surf *p = s->parent;
+    if (!p || s->role != R_SUB) return;
+    Surf *c = p->cached;
+    if (c) for (int i = 0; i < c->nkids; i++) if (c->kids[i] == s) {
+        memmove(c->kids + i, c->kids + i + 1, (size_t)(c->nkids - i - 1) * sizeof *c->kids);
+        memmove(c->cache_x + i, c->cache_x + i + 1, (size_t)(c->nkids - i - 1) * sizeof *c->cache_x);
+        memmove(c->cache_y + i, c->cache_y + i + 1, (size_t)(c->nkids - i - 1) * sizeof *c->cache_y);
+        if (i < c->nbelow) c->nbelow--;
+        c->nkids--;
+        break;
+    }
+    for (int i = 0; i < p->nkids; i++) if (p->kids[i] == s) {
+        memmove(p->kids + i, p->kids + i + 1, (size_t)(p->nkids - i - 1) * sizeof *p->kids);
+        if (i < p->nbelow) p->nbelow--;
+        break;
+    }
+    for (int i = 0; i < p->nkids; i++) if (p->p_kids[i] == s) {
+        memmove(p->p_kids + i, p->p_kids + i + 1, (size_t)(p->nkids - i - 1) * sizeof *p->p_kids);
+        if (i < p->p_nbelow) p->p_nbelow--;
+        break;
+    }
+    p->nkids--;
+    p->kids[p->nkids] = p->p_kids[p->nkids] = NULL;
+}
+
 static void srf_commit(struct wl_client *c, struct wl_resource *r) {
     (void)c;
     Surf *s = wl_resource_get_user_data(r);
     if (keylag_enabled && key_focus && c == key_focus->client) keylag_commit();
+    if (commit_subsurface_state(s)) return;
+    if (!s->p_attached && (s->p_surface_damage || gsc_area(s->p_buffer_damage))) s->shm_valid = 0;
     if (s->p_attached) {
+        s->oriented_dirty = 1;
         take_buffer(s, s->p_buf);
         if (s->p_buf) { wl_list_remove(&s->p_buf_destroy.link); wl_list_init(&s->p_buf_destroy.link); }
         s->p_buf = NULL;
         s->p_attached = 0;
     }
-    s->bscale = s->p_bscale;
+    apply_buffer_state(s);
+    s->p_buffer_damage = (Rect){ 0 };
+    s->p_surface_damage = 0;
     apply_viewport(s);
+    if (apply_subsurface_state(s)) damage_node_mode(s, 1);
     if (s->p_input_set) {
         WlRgn t = s->input;                 /* the pending one is overwritten by the next request */
         s->input = s->p_input;
@@ -668,6 +964,7 @@ static void srf_commit(struct wl_client *c, struct wl_resource *r) {
         s->cursor_hx = s->p_hx;
         s->cursor_hy = s->p_hy;
         if (s == cursor_surf) cursor_gen++;
+        flush_synced_children(s, 0);
         return;
     }
     if (s->role == R_DNDICON) {
@@ -676,6 +973,7 @@ static void srf_commit(struct wl_client *c, struct wl_resource *r) {
         s->dnd_y += s->p_dnd_y;
         s->p_dnd_x = s->p_dnd_y = 0;
         dnd_icon_damage();
+        flush_synced_children(s, 0);
         return;
     }
     s->p_dnd_x = s->p_dnd_y = 0;
@@ -684,11 +982,19 @@ static void srf_commit(struct wl_client *c, struct wl_resource *r) {
         s->has_geom = 1;
         s->p_geom = 0;
     }
-    if (s->role == R_SUB) { s->sx = s->p_sx; s->sy = s->p_sy; }
     surface_commit_role(s);
+    flush_synced_children(s, 0);
 }
 
-static void srf_transform(struct wl_client *c, struct wl_resource *r, int32_t t) { (void)c; (void)r; (void)t; }
+static void srf_transform(struct wl_client *c, struct wl_resource *r, int32_t t) {
+    (void)c;
+    if (t < WL_OUTPUT_TRANSFORM_NORMAL || t > WL_OUTPUT_TRANSFORM_FLIPPED_270) {
+        wl_resource_post_error(r, WL_SURFACE_ERROR_INVALID_TRANSFORM, "invalid buffer transform");
+        return;
+    }
+    Surf *s = wl_resource_get_user_data(r);
+    s->p_transform = t;
+}
 static void srf_scale(struct wl_client *c, struct wl_resource *r, int32_t sc) {
     (void)c;
     Surf *s = wl_resource_get_user_data(r);
@@ -698,6 +1004,7 @@ static void srf_scale(struct wl_client *c, struct wl_resource *r, int32_t sc) {
 static void srf_offset(struct wl_client *c, struct wl_resource *r, int32_t x, int32_t y) {
     (void)c;
     Surf *s = wl_resource_get_user_data(r);
+    if (s->role == R_SUB) return;
     s->p_dnd_x += x;
     s->p_dnd_y += y;
 }
@@ -705,7 +1012,7 @@ static void srf_offset(struct wl_client *c, struct wl_resource *r, int32_t x, in
 static const struct wl_surface_interface surface_impl = {
     .destroy = srf_destroy, .attach = srf_attach, .damage = srf_damage, .frame = srf_frame,
     .set_opaque_region = srf_opaque, .set_input_region = srf_input, .commit = srf_commit,
-    .set_buffer_transform = srf_transform, .set_buffer_scale = srf_scale, .damage_buffer = srf_damage,
+    .set_buffer_transform = srf_transform, .set_buffer_scale = srf_scale, .damage_buffer = srf_damage_buffer,
     .offset = srf_offset,
 };
 
@@ -920,8 +1227,8 @@ static void surface_gone(struct wl_resource *r) {
     if (s->ksi) kbi_surface_gone(s->ksi);
     if (s->parent) {
         Surf *p = s->parent;
-        for (int i = 0; i < p->nkids; i++) if (p->kids[i] == s) { p->kids[i] = p->kids[--p->nkids]; break; }
-        damage_node(p);
+        remove_subsurface(s);
+        damage_node_mode(p, 1);
     }
     for (int i = 0; i < s->nkids; i++) s->kids[i]->parent = NULL;
     for (int i = 0; i < MAX_SURF; i++) {
@@ -951,10 +1258,12 @@ static void surface_gone(struct wl_resource *r) {
     if (constraint && constraint->surf == s) { constraint->surf = NULL; constraint->active = 0; }
     constraint_update();                /* s may have been the window with the keyboard */
     if (s->dmabuf) queue_release(s->dmabuf);
+    sub_cache_destroy(s);
     gpu_tex_free(s->tex);
     wlrgn_free(&s->input);
     wlrgn_free(&s->p_input);
     free(s->px);
+    free(s->oriented);
     free(s);
 }
 
@@ -1021,11 +1330,53 @@ static void sub_position(struct wl_client *c, struct wl_resource *r, int32_t x, 
     Surf *s = wl_resource_get_user_data(r);
     if (s) { s->p_sx = x; s->p_sy = y; }
 }
-static void sub_place(struct wl_client *c, struct wl_resource *r, struct wl_resource *sibling) { (void)c; (void)r; (void)sibling; }
-static void sub_sync(struct wl_client *c, struct wl_resource *r) { (void)c; (void)r; }
+static void sub_place_relative(struct wl_resource *r, struct wl_resource *sibling, int above) {
+    Surf *s = wl_resource_get_user_data(r), *target = wl_resource_get_user_data(sibling);
+    if (!s || !s->parent) return;
+    Surf *p = s->parent;
+    if (!target || target == s || (target != p && (target->role != R_SUB || target->parent != p))) {
+        wl_resource_post_error(r, WL_SUBSURFACE_ERROR_BAD_SURFACE, "surface is not a sibling or parent");
+        return;
+    }
+    Surf *order[17];
+    int n = 0;
+    for (int i = 0; i <= p->nkids; i++) {
+        if (i == p->p_nbelow) order[n++] = p;
+        if (i < p->nkids && p->p_kids[i] != s) order[n++] = p->p_kids[i];
+    }
+    int at = 0;
+    while (at < n && order[at] != target) at++;
+    if (at == n) return;
+    at += !!above;
+    for (int i = n; i > at; i--) order[i] = order[i - 1];
+    order[at] = s;
+    int k = 0;
+    for (int i = 0; i <= n; i++) {
+        if (order[i] == p) p->p_nbelow = k;
+        else p->p_kids[k++] = order[i];
+    }
+}
+static void sub_above(struct wl_client *c, struct wl_resource *r, struct wl_resource *sibling) {
+    (void)c; sub_place_relative(r, sibling, 1);
+}
+static void sub_below(struct wl_client *c, struct wl_resource *r, struct wl_resource *sibling) {
+    (void)c; sub_place_relative(r, sibling, 0);
+}
+static void sub_sync(struct wl_client *c, struct wl_resource *r) {
+    (void)c;
+    Surf *s = wl_resource_get_user_data(r);
+    if (s) s->sub_sync = 1;
+}
+static void sub_desync(struct wl_client *c, struct wl_resource *r) {
+    (void)c;
+    Surf *s = wl_resource_get_user_data(r);
+    if (!s) return;
+    s->sub_sync = 0;
+    release_desynced_subtree(s);
+}
 static const struct wl_subsurface_interface subsurface_impl = {
-    .destroy = sub_destroy, .set_position = sub_position, .place_above = sub_place, .place_below = sub_place,
-    .set_sync = sub_sync, .set_desync = sub_sync,
+    .destroy = sub_destroy, .set_position = sub_position, .place_above = sub_above, .place_below = sub_below,
+    .set_sync = sub_sync, .set_desync = sub_desync,
 };
 
 static void sub_gone(struct wl_resource *r) {
@@ -1033,29 +1384,37 @@ static void sub_gone(struct wl_resource *r) {
     if (!s) return;
     if (s->parent) {
         Surf *p = s->parent;
-        for (int i = 0; i < p->nkids; i++) if (p->kids[i] == s) { p->kids[i] = p->kids[--p->nkids]; break; }
-        damage_node(p);
+        remove_subsurface(s);
+        damage_node_mode(p, 1);
     }
     s->parent = NULL;
     s->sub = NULL;
     s->role = R_NONE;
+    sub_cache_destroy(s);
+    release_desynced_subtree(s);
 }
 
 static void subc_destroy(struct wl_client *c, struct wl_resource *r) { (void)c; wl_resource_destroy(r); }
 static void subc_get(struct wl_client *c, struct wl_resource *r, uint32_t id, struct wl_resource *surface, struct wl_resource *parent) {
     Surf *s = wl_resource_get_user_data(surface), *p = wl_resource_get_user_data(parent);
-    /* one wl_subsurface per wl_surface, and not for a surface that has another role (cursor, drag icon) */
-    if (s->sub || s->role == R_CURSOR || s->role == R_DNDICON || s == p) {
+    int cycle = 0;
+    for (Surf *a = p; a; a = a->parent) if (a == s) { cycle = 1; break; }
+    if (!s || !p || s->sub || s->role != R_NONE || cycle) {
         wl_resource_post_error(r, WL_SUBCOMPOSITOR_ERROR_BAD_SURFACE, "the wl_surface already has a role");
         return;
     }
+    if (p->nkids >= (int)(sizeof p->kids / sizeof *p->kids)) { wl_client_post_no_memory(c); return; }
     struct wl_resource *res = wl_resource_create(c, &wl_subsurface_interface, wl_resource_get_version(r), id);
     if (!res) { wl_client_post_no_memory(c); return; }
     wl_resource_set_implementation(res, &subsurface_impl, s, sub_gone);
     s->role = R_SUB;
+    s->sub_sync = 1;
     s->sub = res;
     s->parent = p;
-    if (p->nkids < 16) p->kids[p->nkids++] = s;
+    s->sx = s->sy = s->p_sx = s->p_sy = 0;
+    p->kids[p->nkids] = p->p_kids[p->nkids] = s;
+    p->nkids++;
+    damage_node_mode(p, 1);
 }
 static const struct wl_subcompositor_interface subcompositor_impl = { .destroy = subc_destroy, .get_subsurface = subc_get };
 
@@ -2433,6 +2792,7 @@ static void enter_fullscreen(Surf *s) {
     s->conf_h = (int)fh;
     send_toplevel_configure(s);
     if (s->mapped) emit(s, "fullscreen", "{}");
+    if (s->mapped) wl_set_focus(s->id);
     damage_add((Box){ 0, 0, ui.width, ui.height });
     ui.dirty = 1;
 }
@@ -2849,8 +3209,10 @@ static Rect phys_rect(Rect r) {
 
 /* Source rect of a surface's buffer (the viewport crop is in surface coordinates: × buffer scale). */
 static void source_rect(const Surf *s, float *sx, float *sy, float *sw, float *sh) {
-    *sx = 0; *sy = 0; *sw = (float)s->w; *sh = (float)s->h;
-    if (s->viewport && s->vsw > 0) {
+    int w, h;
+    buffer_transform_size(s->transform, s->w, s->h, &w, &h);
+    *sx = 0; *sy = 0; *sw = (float)w; *sh = (float)h;
+    if (s->vsw > 0) {
         float b = (float)(s->bscale > 0 ? s->bscale : 1);
         *sx = s->vsx * b; *sy = s->vsy * b; *sw = s->vsw * b; *sh = s->vsh * b;
     }
@@ -2898,13 +3260,35 @@ void wl_tf_open_holes(Canvas *c) {
 
 /* CPU path: the buffer into its logical box (x, y, lw × lh) at the display's resolution. A client
  * that rendered at exactly that size (fractional-scale) is copied 1:1; others are scaled. */
-static void blit_surface(Canvas *c, const Surf *s, float x, float y, float sxk, float syk, float op) {
+/* CPU fallback/capture/cursor cache. GPU composition samples the raw buffer
+ * directly, so it never pays for this copy. Invalidated on content or transform. */
+static const uint32_t *surface_pixels(Surf *s, int *w, int *h) {
+    buffer_transform_size(s->transform, s->w, s->h, w, h);
+    if (!s->transform || !s->px) return s->px;
+    if (!s->oriented || s->oriented_dirty) {
+        uint32_t *p = realloc(s->oriented, (size_t)s->w * s->h * sizeof *p);
+        if (!p) return NULL;
+        s->oriented = p;
+        for (int y = 0; y < *h; y++) for (int x = 0; x < *w; x++) {
+            int rx, ry;
+            buffer_transform_pixel(s->transform, x, y, s->w, s->h, &rx, &ry);
+            p[(size_t)y * *w + x] = s->px[(size_t)ry * s->w + rx];
+        }
+        s->oriented_dirty = 0;
+    }
+    return s->oriented;
+}
+
+static void blit_surface(Canvas *c, Surf *s, float x, float y, float sxk, float syk, float op) {
+    int w, h;
+    const uint32_t *px = surface_pixels(s, &w, &h);
+    if (!px) return;
     float sx, sy, sw, sh;
     source_rect(s, &sx, &sy, &sw, &sh);
     float dx = PVX(x), dy = PVY(y), dw = s->lw * paint_view.k * sxk, dh = s->lh * paint_view.k * syk;
-    if (sx == 0 && sy == 0 && sw == (float)s->w && sh == (float)s->h && fabsf(dw - sw) < 0.5f && fabsf(dh - sh) < 0.5f)
-        canvas_blit(c, s->px, s->w, s->h, (int)lroundf(dx), (int)lroundf(dy), 0, op, s->opaque);
-    else canvas_blit_scaled(c, s->px, s->w, s->w, s->h, sx, sy, sw, sh, dx, dy, dw, dh, op, s->opaque);
+    if (sx == 0 && sy == 0 && sw == (float)w && sh == (float)h && fabsf(dw - sw) < 0.5f && fabsf(dh - sh) < 0.5f)
+        canvas_blit(c, px, w, h, (int)lroundf(dx), (int)lroundf(dy), 0, op, s->opaque);
+    else canvas_blit_scaled(c, px, w, w, h, sx, sy, sw, sh, dx, dy, dw, dh, op, s->opaque);
 }
 
 /* A screenshot while the GPU composes: a window whose content is only a dmabuf texture (a GPU app,
@@ -2923,6 +3307,7 @@ static uint32_t *capture_readback(const Surf *s) {
 
 static void paint_tree(Canvas *c, Surf *s, float x, float y, float op, Rect clip) {
     uint32_t *tmp;
+    for (int i = 0; i < s->nbelow; i++) paint_tree(c, s->kids[i], x + s->kids[i]->sx, y + s->kids[i]->sy, op, clip);
     if (gpu_active() && !paint_capture_mode) {          /* in a screenshot they are always copied */
         if (tfv.on) {
             if (s->content && !tfv.skip && ntf_holes < TF_HOLES && ndraws[0] < 128) {
@@ -2954,11 +3339,12 @@ static void paint_tree(Canvas *c, Surf *s, float x, float y, float op, Rect clip
     } else if (s->px) blit_surface(c, s, x, y, 1, 1, op);
     else if ((tmp = capture_readback(s))) {
         s->px = tmp;
+        s->oriented_dirty = 1;
         blit_surface(c, s, x, y, 1, 1, op);
         s->px = NULL;
         free(tmp);
     }
-    for (int i = 0; i < s->nkids; i++) paint_tree(c, s->kids[i], x + s->kids[i]->sx, y + s->kids[i]->sy, op, clip);
+    for (int i = s->nbelow; i < s->nkids; i++) paint_tree(c, s->kids[i], x + s->kids[i]->sx, y + s->kids[i]->sy, op, clip);
 }
 
 void wl_paint_begin(void) { ndraws[0] = ndraws[1] = 0; }
@@ -3048,8 +3434,9 @@ static GpuTex *surface_tex(Surf *s) {
         /* this context does not import it: the last good frame (px) is drawn instead */
     }
     if (s->px && (s->tex_dirty || !s->tex)) {
-        s->tex = gpu_tex_pixels(s->tex, s->px, s->w, s->h, s->opaque);
-        s->tex_dirty = 0;
+        Rect dirty = s->tex_dirty == 2 ? s->tex_damage : (Rect){ 0, 0, s->w, s->h };
+        s->tex = gpu_tex_pixels_damage(s->tex, s->px, s->w, s->h, s->opaque, dirty);
+        if (s->tex) { s->tex_dirty = 0; s->tex_damage = (Rect){ 0 }; }
     }
     return s->tex;
 }
@@ -3060,12 +3447,14 @@ static void draw_surface(Surf *s, float x, float y, float dw, float dh, Rect cli
     if (!t) return;
     float sx, sy, sw, sh;
     source_rect(s, &sx, &sy, &sw, &sh);
-    gpu_draw(t, PVX(x), PVY(y), dw * paint_view.k, dh * paint_view.k, sx, sy, sw, sh, phys_rect(clip), op);
+    gpu_draw_transform(t, PVX(x), PVY(y), dw * paint_view.k, dh * paint_view.k, sx, sy, sw, sh, phys_rect(clip), op, s->transform);
 }
 
 static void draw_tree(Surf *s, float x, float y, float scale_x, float scale_y, Rect clip) {
+    for (int i = 0; i < s->nbelow; i++)
+        draw_tree(s->kids[i], x + s->kids[i]->sx * scale_x, y + s->kids[i]->sy * scale_y, scale_x, scale_y, clip);
     draw_surface(s, x, y, s->lw * scale_x, s->lh * scale_y, clip, 1);
-    for (int i = 0; i < s->nkids; i++)
+    for (int i = s->nbelow; i < s->nkids; i++)
         draw_tree(s->kids[i], x + s->kids[i]->sx * scale_x, y + s->kids[i]->sy * scale_y, scale_x, scale_y, clip);
 }
 
@@ -3095,7 +3484,7 @@ void wl_gpu_draw_layer(int layer) {
             GpuTex *t = surface_tex(s);
             float sx, sy, sw, sh;
             source_rect(s, &sx, &sy, &sw, &sh);
-            if (t) gpu_draw(t, (float)p.x0, (float)p.y0, (float)(p.x1 - p.x0), (float)(p.y1 - p.y0), sx, sy, sw, sh, phys_rect(d->clip), d->op);
+            if (t) gpu_draw_transform(t, (float)p.x0, (float)p.y0, (float)(p.x1 - p.x0), (float)(p.y1 - p.y0), sx, sy, sw, sh, phys_rect(d->clip), d->op, s->transform);
         }
         return;
     }
@@ -3129,7 +3518,7 @@ void wl_paint_fullscreen(Canvas *out) {
     if (fx >= vx1 || fy >= vy1 || fx + fw <= paint_view.x || fy + fh <= paint_view.y) return;
     uint32_t *tmp = fs_surf->px ? NULL : capture_readback(fs_surf);     /* a GPU app in a screenshot */
     if (!fs_surf->px && !tmp) return;
-    if (tmp) fs_surf->px = tmp;
+    if (tmp) { fs_surf->px = tmp; fs_surf->oriented_dirty = 1; }
     Rect oc = out->clip;
     canvas_set_clip(out, rect_and(oc, (Rect){ (int)floorf(PVX(fx)), (int)floorf(PVY(fy)), (int)ceilf(PVX(fx + fw)), (int)ceilf(PVY(fy + fh)) }));
     blit_surface(out, fs_surf, x, y, sx, sy, 1);
@@ -3152,10 +3541,7 @@ int wl_wants_frame(void) { return need_frame; }
 static void scanout_done(void *data) {
     Dmabuf *d = data;
     d->scanned = 0;
-    int current = 0;
-    for (int i = 0; i < MAX_SURF && !current; i++) if (surfs[i] && surfs[i]->dmabuf == d) current = 1;
-    if (d->res && !current) wl_buffer_send_release(d->res);
-    dm_unref(d);
+    release_dm_reference(d);
 }
 
 int wl_try_scanout(int cursor_free) {
@@ -3164,7 +3550,7 @@ int wl_try_scanout(int cursor_free) {
     Dmabuf *d = fs_surf->dmabuf;
     int pw = 0, ph = 0, nused = 0;              /* one display, at its physical size */
     for (int i = 0; i < OUT_MAX; i++) if (oslots[i].used) { nused++; pw = oslots[i].o.pw; ph = oslots[i].o.ph; }
-    if (nused != 1 || fs_surf->viewport || fs_surf->gx || fs_surf->gy || !gpu_can_scanout(&d->d, pw, ph)) return 0;
+    if (nused != 1 || fs_surf->transform || fs_surf->viewport || fs_surf->gx || fs_surf->gy || !gpu_can_scanout(&d->d, pw, ph)) return 0;
     d->refs++;
     d->scanned = 1;
     if (gpu_scanout(&d->d, scanout_done, d)) { d->scanned = 0; dm_unref(d); return 0; }
@@ -3181,12 +3567,7 @@ void wl_frame_done(unsigned t) {
     if (!dpy) return;
     need_frame = 0;
     update_surface_outputs();
-    for (int i = 0; i < nrelease; i++) {
-        Dmabuf *d = to_release[i];
-        if (d->res && !d->scanned) wl_buffer_send_release(d->res);
-        dm_unref(d);
-    }
-    nrelease = 0;
+    release_retired_buffers();
     for (int i = 0; i < MAX_SURF; i++) {
         Surf *s = surfs[i];
         if (!s) continue;
@@ -3252,7 +3633,7 @@ int wl_frame_unseen(unsigned t) {
 /* ---- input ---- */
 
 static Surf *surface_at(Surf *s, float lx, float ly, float *ox, float *oy) {
-    for (int i = s->nkids - 1; i >= 0; i--) {
+    for (int i = s->nkids - 1; i >= s->nbelow; i--) {
         Surf *k = s->kids[i];
         Surf *hit = surface_at(k, lx - k->sx, ly - k->sy, ox, oy);
         if (hit) return hit;
@@ -3262,6 +3643,11 @@ static Surf *surface_at(Surf *s, float lx, float ly, float *ox, float *oy) {
     if (s->content && lx >= 0 && ly >= 0 && lx < s->lw && ly < s->lh && (!s->has_input || wlrgn_has(&s->input, rx, ry))) {
         *ox = lx; *oy = ly;
         return s;
+    }
+    for (int i = s->nbelow - 1; i >= 0; i--) {
+        Surf *k = s->kids[i];
+        Surf *hit = surface_at(k, lx - k->sx, ly - k->sy, ox, oy);
+        if (hit) return hit;
     }
     return NULL;
 }
@@ -3300,7 +3686,7 @@ static Surf *surface_under_ex(float x, float y, Node *hit, float *lx, float *ly,
         if (skip_xicon && popups[i]->xw && xwm_is_dnd_icon(popups[i]->xw)) continue;   /* an X app's drag icon */
         if (origin(popups[i], &ox, &oy)) target = surface_at(popups[i], x - ox, y - oy, lx, ly);
     }
-    if (!target && fs_surf && fs_surf->content) {
+    if (!target && fullscreen_at(x, y)) {
         float ox, oy;
         if (origin(fs_surf, &ox, &oy)) target = surface_at(fs_surf, x - ox, y - oy, lx, ly);
     } else if (!target && hit && hit->type == NODE_SURFACE) {
@@ -3970,12 +4356,19 @@ int wl_pointer(float x, float y, Node *hit, int moved, int nbuttons, const int *
             if (!t || t->role != R_POPUP) dismiss_popups();
         }
     pointer_enter(target, lx, ly);
-    if (!target) return fs_surf && fs_surf->content ? 2 : 0;    /* a hole in a fullscreen window: not the UI below */
+    if (!target) return fullscreen_at(x, y) ? 2 : 0;    /* a hole in a fullscreen window: not the UI below */
     /* a window under a modal dialog gets no presses and no wheel (releases still go: a drag ends);
      * the theme still sees the click and brings the dialog forward (sdk/dialogmodel.js) */
     Surf *owner = target;
     while (owner && owner->role == R_SUB) owner = owner->parent;
     int held = owner && owner->role == R_TOPLEVEL && modal_over(owner);
+    /* Fullscreen clicks bypass the shell, so restore keyboard focus here.
+     * Other outputs keep the focus selected by the shell. */
+    if (fullscreen_at(x, y)) {
+        Surf *top = toplevel_of(target);
+        for (int i = 0; top && i < nbuttons; i++)
+            if (down[i] && button[i] == 0) { wl_set_focus(top->id); break; }
+    }
     if (held) wheel = 0;
     for (int i = 0; i < nbuttons; i++)          /* a new press: the one a start_drag may name */
         if (down[i] && !held) { npress = 0; press_surf = target; }
@@ -4008,7 +4401,7 @@ int wl_pointer(float x, float y, Node *hit, int moved, int nbuttons, const int *
     if (xheld && !buttons_held) xdrag_release();
     Surf *top = target;
     while (top && top->role == R_SUB) top = top->parent;
-    if (fs_surf && fs_surf->content) return 2;  /* fullscreen: the UI does not see the pointer */
+    if (fullscreen_at(x, y)) return 2;  /* only this output hides the UI from the pointer */
     return top && top->role == R_POPUP ? 2 : 1;
 }
 
@@ -4390,7 +4783,6 @@ int wl_key(int code, int value, const KeyInfo *k) {
         else if (!value && key_focus) send_key_to_focus(code, 0);   /* pressed before the switcher opened */
         return 0;
     }
-    if (fs_surf && fs_surf->content && key_focus != fs_surf) wl_set_focus(fs_surf->id);
     /* An app holding the shortcuts gets every key but the few kbi_route keeps; ❖Esc turns that off, and with it
      * a locked pointer and fullscreen, so everything is LordOS's again; pressed again it holds again. */
     KbInhib *ki = value == 1 && was_to_app ? focus_inhibitor() : NULL;
@@ -4658,25 +5050,39 @@ void wl_set_drm_device(dev_t dev) { drm_dev = dev; }
 
 /* The GPU is going away (gpu_shutdown, its context still current): every window showing a dmabuf
  * keeps its last good frame as pixels for the CPU path, and textures are freed while they still can be. */
-static void wl_gpu_lost(void) {
-    for (int i = 0; i < MAX_SURF; i++) {
-        Surf *s = surfs[i];
-        if (!s) continue;
-        Dmabuf *d = s->dmabuf;
-        if (d && gpu_tex_current(d->tex)) {
-            int w = d->d.width, h = d->d.height;
-            uint32_t *px = w <= 8192 && h <= 8192 ? malloc((size_t)w * (size_t)h * 4) : NULL;
-            if (px && gpu_tex_read(d->tex, px, w, h) == 0) {
-                free(s->px);
-                s->px = px;
-                s->w = w;
-                s->h = h;
-            } else {
-                free(px);
-                if (map_linear(s, d)) { free(s->px); s->px = NULL; }
-            }
+static void preserve_gpu_pixels(Surf *s) {
+    s->oriented_dirty = 1;
+    Dmabuf *d = s->dmabuf;
+    if (d && gpu_tex_current(d->tex)) {
+        int w = d->d.width, h = d->d.height;
+        uint32_t *px = w <= 8192 && h <= 8192 ? malloc((size_t)w * (size_t)h * 4) : NULL;
+        if (px && gpu_tex_read(d->tex, px, w, h) == 0) {
+            free(s->px);
+            s->px = px;
+            s->w = w;
+            s->h = h;
+        } else {
+            free(px);
+            if (map_linear(s, d)) { free(s->px); s->px = NULL; }
         }
+    }
+}
+
+static void wl_gpu_lost(void) {
+    /* A buffer may be shared by visible surfaces and synchronized caches.
+     * Read every holder before dropping the shared EGLImage/texture. */
+    for (int i = 0; i < MAX_SURF; i++) if (surfs[i]) {
+        preserve_gpu_pixels(surfs[i]);
+        if (surfs[i]->cached) preserve_gpu_pixels(surfs[i]->cached);
+    }
+    for (int i = 0; i < MAX_SURF; i++) if (surfs[i]) {
+        Surf *s = surfs[i];
+        Dmabuf *d = s->dmabuf;
         if (d) { gpu_tex_free(d->tex); d->tex = NULL; }
+        if (s->cached && s->cached->dmabuf) {
+            d = s->cached->dmabuf;
+            gpu_tex_free(d->tex); d->tex = NULL;
+        }
         gpu_tex_free(s->tex);
         s->tex = NULL;
         s->tex_dirty = 1;
@@ -4945,9 +5351,8 @@ int wl_cursor(const uint32_t **px, int *w, int *h, int *hx, int *hy, unsigned *g
     *gen = cursor_gen + (cursor_size_serial() << 20);      /* the pointer size redraws own shapes */
     if (wl_pointer_locked()) return 2;
     if (cursor_mode == 1 && cursor_surf && cursor_surf->px) {
-        *px = cursor_surf->px;
-        *w = cursor_surf->w;
-        *h = cursor_surf->h;
+        *px = surface_pixels(cursor_surf, w, h);
+        if (!*px) return 0;
         *hx = cursor_surf->cursor_hx;
         *hy = cursor_surf->cursor_hy;
         return 1;
@@ -4973,7 +5378,6 @@ void wl_set_focus(int id) {
     if (s && s->role != R_TOPLEVEL) s = NULL;
     if (s && s->parked) s = NULL;                      /* a window on a hidden desktop never has the keyboard */
     if (s && modal_over(s)) s = modal_over(s);         /* under a modal dialog: the keys are the dialog's */
-    if (fs_surf && fs_surf->content) s = fs_surf;      /* in fullscreen the keyboard is its own */
     if (s == key_focus) return;
     struct wl_resource *kb;
     if (key_focus) {
@@ -5229,6 +5633,7 @@ void wl_stop(void) {
     if (!dpy) return;
     xwl_stop();
     wl_display_destroy_clients(dpy);
+    release_retired_buffers();
     wl_display_destroy(dpy);
     dpy = NULL;
 }
@@ -5267,7 +5672,7 @@ struct wl_resource *wl__surface_at(float x, float y, float *lx, float *ly) {
         float ox, oy;
         if (origin(popups[i], &ox, &oy)) target = surface_at(popups[i], x - ox, y - oy, lx, ly);
     }
-    if (!target && fs_surf && fs_surf->content) {
+    if (!target && fullscreen_at(x, y)) {
         float ox, oy;
         if (origin(fs_surf, &ox, &oy)) target = surface_at(fs_surf, x - ox, y - oy, lx, ly);
     } else if (!target) {

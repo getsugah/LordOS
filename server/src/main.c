@@ -1482,7 +1482,8 @@ static void update_cursor(Server *s) {
     if (s->hw_cursor) {
         if (mode != 2)
             for (int i = 0; i < OUT_MAX; i++)
-                if (s->out[i].on && s->out[i].gpu >= 0) kms_cursor_image(&s->out[i].kms, px, w, h, hx, hy);
+                if (s->out[i].on && s->out[i].gpu >= 0 && kms_cursor_image(&s->out[i].kms, px, w, h, hx, hy))
+                    s->cursor_gen = gen - 1; /* retry a failed image update on the next cursor refresh */
         hw_cursor_move(s);
     }
     s->cursor_tex = gpu_tex_pixels(s->cursor_tex, px, w, h, 0);
@@ -1773,12 +1774,27 @@ static int gdrag_feed_up(void *ctx, int which, const uint32_t *px, int w, int h,
 /* the displays whose GPU drag textures catch up after this frame: after its flips are queued and its time is
  * taken, while the CPU would wait for the vblank anyway (docs/GPU.md, "Uploads without a stall") */
 static int feed_idx[OUT_MAX], nfeed;
+static long gdrag_feed_budget = GDRAG_FEED_PX;
+
+static void gdrag_feed_configure(void) {
+    const char *setting = getenv("LORD_GPU_DRAG_FEED");
+    if (!setting) return;
+    char *end;
+    long slices = strtol(setting, &end, 10);
+    if (end == setting || *end || slices < 1 || slices > 4) {
+        fprintf(stderr, "gpu: LORD_GPU_DRAG_FEED needs a multiplier from 1 to 4\n");
+        return;
+    }
+    gdrag_feed_budget = slices * GDRAG_FEED_PX;
+    fprintf(stderr, "gpu: GPU drag catch-up budget %ld pixels after presentation\n", gdrag_feed_budget);
+}
+
 static void gdrag_feed_now(Server *s, LbPhase *ph) {
     for (int k = 0; k < nfeed; k++) {
         Out *o = &s->out[feed_idx[k]];
         if (!o->on || o->gpu < 0 || !gpu_gdrag_ready(o->gpu) || paint_gdrag_backlog(feed_idx[k]) <= 0) continue;
         double f0 = now_ms();
-        long sent = paint_gdrag_feed(feed_idx[k], GDRAG_FEED_PX, gdrag_feed_up, &o->gpu);
+        long sent = paint_gdrag_feed(feed_idx[k], gdrag_feed_budget, gdrag_feed_up, &o->gpu);
         if (o == main_out(s)) { ph->feed_ms = now_ms() - f0; ph->feed_px = sent; }
     }
     nfeed = 0;
@@ -2535,6 +2551,7 @@ int main(int argc, char **argv) {
     sigaction(SIGTERM, &stop_sa, NULL);
     keylag_init(s.greeter);                 /* key latency trace, only with LORD_INPUT_DEBUG=1 (keylag.h) */
     fpipe_init(&fpipe, getenv("LORD_PIPELINE"));
+    gdrag_feed_configure();
     fprintf(stderr, "lord-server: frame pipeline %s (LORD_PIPELINE: unset or 0 off, 1 while frames are heavy, 2 always)\n",
             fpipe.mode == FPIPE_OFF ? "off" : fpipe.mode == FPIPE_ALWAYS ? "always" : "while frames are heavy");
     int sfd = signalfd(-1, &mask, SFD_CLOEXEC);

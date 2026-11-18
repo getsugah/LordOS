@@ -60,7 +60,12 @@ const inTree = (id) => { for (let n = id; n; n = parents.get(n)) if (removed.has
 const rings = () => [...styles].filter(([id, s]) => s.borderWidth === 2 && s.pointerEvents === 'none' && s.position === 'absolute' && inTree(id) && parents.has(id));
 const ringOn = () => { const r = rings(); return r.length === 1 ? parents.get(r[0][0]) : r.length ? 'many' : null; };
 // the node a label is drawn in (its Text's parent), and whether the ring is around it
-const textNode = (label) => [...texts].find(([id, s]) => s === label && inTree(id))?.[0];
+// A closing menu still paints, but its text is no longer an interaction target.
+const textNode = (label) => [...texts].find(([id, s]) => {
+  if (s !== label || !inTree(id)) return false;
+  for (let n = id; n; n = parents.get(n)) if (styles.get(n)?.pointerEvents === 'none') return false;
+  return true;
+})?.[0];
 const ringAround = (label) => { const r = ringOn(); for (let n = textNode(label); n; n = parents.get(n)) if (n === r) return true; return false; };
 const heard = [];
 rt.addListener('keydown', (e) => heard.push(e.key));

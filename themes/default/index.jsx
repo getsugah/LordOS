@@ -13,7 +13,7 @@ import {
 import { apps } from '@lordos/apps';
 import { useEffect, useRef, useState } from 'react';
 import { makeTheme } from './tokens.js';
-import { minimizeStarts } from './minimize.js';
+import { useMinimizing } from './minimize-hook.js';
 import { MenuBars } from './components/MenuBar.jsx';
 import { Dock, LaunchpadIcon, dockThickness } from './components/Dock.jsx';
 import { Window } from './components/Window.jsx';
@@ -48,32 +48,6 @@ configureWindows({ apps, workArea: areaFn, chrome: { w: 2, h: 43 } });
 
 // Pinned by default (the user changes the Dock by dragging and with «Keep in Dock»: settings.dockPinned).
 const DOCK_DEFAULT = [...DOCK_ORDER, ...apps.filter((a) => a.dock && !DOCK_ORDER.includes(a.id)).map((a) => a.id)];
-
-// Minimize effect: a window that was just minimized stays drawn for MIN_MS, shrinking towards the
-// Dock (transform: scale, painted from a cached raster by lord-server; layout doesn't change). With Reduce motion
-// none starts (minimize.js).
-const MIN_MS = 260;
-function useMinimizing(windows) {
-  const prev = useRef(new Map());
-  const [anim, setAnim] = useState([]);                 // [{ id, t0 }]
-  useEffect(() => {
-    const started = minimizeStarts(windows, prev.current, { reduce: !!settings.get().reduceMotion });
-    if (started.length) setAnim((a) => [...a.filter((x) => !started.some((y) => y.id === x.id)), ...started]);
-  }, [windows]);
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!anim.length) return undefined;
-    let raf = requestAnimationFrame(function step() {
-      const now = Date.now();
-      if (anim.some((x) => now - x.t0 >= MIN_MS)) setAnim((a) => a.filter((x) => now - x.t0 < MIN_MS));
-      else { tick((n) => n + 1); raf = requestAnimationFrame(step); }
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [anim]);
-  const now = Date.now();
-  return anim.map((x) => ({ win: windows.find((w) => w.id === x.id), p: Math.min(1, (now - x.t0) / MIN_MS) }))
-    .filter((x) => x.win && x.win.minimized);
-}
 
 // Lord Flow's own shortcuts (the common ones are in sdk/shortcuts.js).
 const onFront = (fn) => () => { const id = wm.focused(); if (id) fn(id); };

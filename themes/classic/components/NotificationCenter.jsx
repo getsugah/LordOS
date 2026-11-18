@@ -8,6 +8,7 @@ import {
   openCalendarApp,
 } from '@lordos/sdk';
 import { useEffect, useRef, useState } from 'react';
+import { usePanelEntrance } from '../../../sdk/microanimation-hooks.js';
 import { BellGlyph, CloseGlyph, Chevron } from '../glyphs.jsx';
 
 const W = 380;
@@ -86,6 +87,7 @@ function MonthCalendar({ t }) {
 
 export function NotificationCenter({ t, at, onClose, isOnBar }) {
   const ref = useRef(null);
+  usePanelEntrance(ref);
   const list = useStore(notifyHistory);
   const [s] = useSettings();
   const cal = menuBarPrefs(s).calendar;

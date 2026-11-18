@@ -1,3 +1,4 @@
+import { useAutohide } from './dock-autohide.js';
 // Dock with magnification by mouse position, tooltip and open-app dot. It can go at the bottom,
 // on the left or on the right (Settings → Desktop & Dock), hide (always, or only while a window
 // covers it) and show recent apps. Left and right are physical sides of the screen, also in Arabic or Hebrew (as
@@ -15,7 +16,6 @@ import { useEffect, useRef, useState } from 'react';
 
 const GAP = 8, PAD = 9, MARGIN = 6;
 const SEP = GAP + 1;          // separator before the recent apps and before the Trash
-const SLIDE_MS = 180;
 const REORDER_MS = 150;       // neighbours sliding aside while dragging
 const POOF_MS = 320;
 const NEAR = 60;              // dragged farther than this from the Dock: the remove cue (after a hold)
@@ -69,82 +69,6 @@ export function TrashIcon({ size: s, full, dark }) {
   );
 }
 
-// Auto-hide: shows when the pointer touches the edge (after a short delay) and hides
-// when it leaves the Dock. State only changes when crossing those boundaries: moving the mouse around the rest of the
-// screen doesn't redraw anything. The animation belongs to this component, not the desktop.
-// force: shown right away (an app being dragged from the app launcher).
-// mode (sdk/dockmodel.js, issue #46): 'never' hides nothing; 'always' as above; 'overlap' hides only
-// while `covered` (a window is where the Dock is) and comes back as soon as nothing covers it; the
-// pointer at the edge still brings it over the windows, and it goes again when the pointer leaves.
-const COVER_MS = 300;         // a window just covered the Dock: it slides away after this
-function useAutohide(mode, position, rectRef, keepOpen, areaRef, force, covered) {
-  const enabled = mode !== 'never';
-  const may = enabled && (mode === 'always' || !!covered);          // may it hide now
-  const [p, setP] = useState(may ? 0 : 1);     // 0 hidden … 1 in view
-  const want = useRef(!may);
-  const keep = useRef(keepOpen);
-  keep.current = keepOpen;
-  const mayHide = useRef(may);
-  mayHide.current = may;
-  const api = useRef(null);
-  useEffect(() => {
-    if (!enabled) { want.current = true; setP(1); return undefined; }
-    want.current = !mayHide.current;
-    setP(want.current ? 1 : 0);
-    let timer = 0, raf = 0, from = 0, t0 = 0, px = -1, py = -1;
-    const animate = (to) => {
-      cancelAnimationFrame(raf);
-      t0 = performance.now();
-      const step = (now) => {
-        const k = Math.min(1, (now - t0) / SLIDE_MS), e = 1 - (1 - k) * (1 - k);
-        setP(from + (to - from) * e);
-        if (k < 1) raf = requestAnimationFrame(step);
-        else from = to;
-      };
-      raf = requestAnimationFrame(step);
-    };
-    const set = (on) => {
-      if (want.current === on) return;
-      want.current = on;
-      from = on ? 0 : 1;
-      animate(on ? 1 : 0);
-    };
-    const stop = () => { if (timer) { clearTimeout(timer); timer = 0; } };
-    const isOver = () => {
-      const r = rectRef.current;
-      return !!r && px >= r.x0 - 8 && px < r.x1 + 8 && py >= r.y0 - 8 && py < r.y1 + 8;
-    };
-    // hides after ms unless, by then, the pointer is on it, a menu of it is open or nothing covers it
-    const hideSoon = (ms) => {
-      if (!timer) timer = setTimeout(() => { timer = 0; if (!keep.current && mayHide.current && !isOver()) set(false); }, ms);
-    };
-    api.current = {
-      show: () => { stop(); set(true); },
-      // 'overlap': a window started or stopped covering the Dock ('always' ↔ 'overlap' too)
-      cover: (on) => {
-        stop();
-        if (!on) set(true);
-        else if (want.current && !keep.current && !isOver()) hideSoon(COVER_MS);
-      },
-    };
-    const off = addListener('pointermove', (e) => {
-      px = e.x; py = e.y;
-      // the edge of the display the Dock is on (the main one: docs/DISPLAYS.md)
-      const A = areaRef.current, inX = e.x >= A.x && e.x < A.x + A.w, inY = e.y >= A.y && e.y < A.y + A.h;
-      const edge = position === 'bottom' ? inX && e.y >= A.y + A.h - 2 : position === 'left' ? inY && e.x <= A.x + 1 : inY && e.x >= A.x + A.w - 2;
-      if (!want.current) {
-        if (edge && !timer) timer = setTimeout(() => { timer = 0; set(true); }, 120);
-        else if (!edge) stop();
-      } else if (!isOver() && !keep.current && mayHide.current) hideSoon(500);
-      else stop();
-    });
-    return () => { off(); stop(); cancelAnimationFrame(raf); api.current = null; };
-  }, [enabled, position]);
-  useEffect(() => { if (force && enabled) api.current?.show(); }, [force, enabled]);
-  useEffect(() => { if (enabled) api.current?.cover(may); }, [may, enabled]);
-  return p;
-}
-
 // Positions that glide to their new value in `ms` (ease-out) while `active`; otherwise they jump.
 // Values are numbers by key; a key seen for the first time starts where `origin(key)` says, or at
 // its target.
@@ -184,7 +108,7 @@ function useGlide(targets, active, ms, origin) {
 // The «poof» after an icon is removed: the icon shrinks and fades and five puffs spread out.
 function Poof({ poof, size, reduce }) {
   const [, tick] = useState(0);
-  const p = poof ? Math.min(1, (Date.now() - poof.t0) / POOF_MS) : 1;
+  const p = poof ? Math.min(1, (performance.now() - poof.t0) / POOF_MS) : 1;
   useEffect(() => {
     if (!poof || p >= 1 || reduce) return undefined;
     const raf = requestAnimationFrame(() => tick((n) => n + 1));
@@ -290,12 +214,12 @@ export function Dock({ t, items: list, running, onOpen, onContext, onTrash, onTr
   const settle = useRef(0);
   const wasDragging = useRef(false);
   const lastGhost = useRef(null);
-  if (wasDragging.current && !dragging) settle.current = Date.now() + REORDER_MS + 40;
+  if (wasDragging.current && !dragging) settle.current = performance.now() + REORDER_MS + 40;
   wasDragging.current = dragging;
   if (drag) lastGhost.current = { id: drag.id, at: vert ? drag.y : drag.x };
   const targets = { __start: startT, __len: len };
   items.forEach((it, i) => { targets[it.id] = startT + real.c[i]; });
-  const glide = useGlide(targets, dragging || Date.now() < settle.current, reduce ? 0 : REORDER_MS,
+  const glide = useGlide(targets, dragging || performance.now() < settle.current, reduce ? 0 : REORDER_MS,
     (k) => (lastGhost.current && lastGhost.current.id === k ? lastGhost.current.at : undefined));
   const start = glide.__start, glen = glide.__len;
   const iconC = items.map((it) => glide[it.id] - start);
@@ -314,7 +238,7 @@ export function Dock({ t, items: list, running, onOpen, onContext, onTrash, onTr
     : position === 'left' ? { x0: AX, x1: AX + MARGIN + bar, y0: restStart, y1: restStart + base.len }
       : { x0: AR - MARGIN - bar, x1: AR, y0: restStart, y1: restStart + base.len };
   const covered = useDockCovered(restRect, hideMode === 'overlap');
-  const shown = useAutohide(hideMode, position, rect, keepOpen || hovered >= 0 || dragging, areaRef, external, covered);
+  const shown = useAutohide(hideMode, position, rect, keepOpen || hovered >= 0 || dragging, areaRef, external, covered, reduce);
   const hide = Math.round((1 - shown) * (bar + MARGIN + 2));
 
   // Drop target (sdk/dock.js): the index among the shown pinned items, or the Trash. Computed from

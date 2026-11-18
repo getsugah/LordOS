@@ -7,7 +7,7 @@
 // choice controls, 0.8.8.8).
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +19,22 @@ let esbuild = null;
 for (const p of nodePaths) { try { esbuild = createRequire(path.join(p, 'x.js'))('esbuild'); break; } catch (e) { /* next */ } }
 if (!esbuild) { console.log('needs node_modules (esbuild)'); process.exit(1); }
 
+const namespaces = new Set();
+for (const d of ['sdk', 'runtime']) {
+  for (const f of readdirSync(path.join(root, d))) {
+    if (!/\.(m?js|jsx)$/.test(f)) continue;
+    for (const m of readFileSync(path.join(root, d, f), 'utf8').matchAll(/lord\.([A-Za-z_]+)\.[A-Za-z_]+\(/g)) namespaces.add(m[1]);
+  }
+}
+
 // A stub lord: nodes, their parents, styles and texts (and which were taken out of the tree), every character 10 px
 // wide; the node that is translated (a scroll view's content) is 1000 px high, every other one 100 px. Any other
 // native call is a no-op.
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
+  const namespaces = new Set(${JSON.stringify([...namespaces])});
   const styles = new Map(), parents = new Map(), texts = new Map(), removed = new Set();
   let nextId = 1;
   const noop = () => undefined;
@@ -42,9 +54,11 @@ const MOCK = `globalThis.__lordTest = (() => {
     ime: new Proxy({}, { get: () => noop }),
     text: { direction: () => 'ltr' },
     locale: { languages: () => ['en'], get: () => 'en', catalog: () => null },
-    settings: { load: () => '{}' },
+    settings: { load: () => '{}', save: noop },
+    sound: { state: () => ({ connected: false, sinks: [], sources: [], inputs: [], outputs: [] }) },
+    keyboard: undefined,
   };
-  globalThis.lord = new Proxy(base, { get: (o, k) => (k in o ? o[k] : typeof k === 'string' ? noop : undefined) });
+  globalThis.lord = new Proxy(base, { get: (o, k) => (k in o ? o[k] : namespaces.has(k) ? undefined : typeof k === 'string' ? noop : undefined) });
   return { styles, parents, texts, removed };
 })();`;
 

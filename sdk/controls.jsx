@@ -6,6 +6,7 @@
 import { View, Text, addListener } from '@lordos/runtime';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme, popupBg } from './theme.js';
+import { useAnimatedStyle, useMenuPresence } from './microanimation-hooks.js';
 import { TextInput, ScrollView, useAppWindow, hasTextFocus, clearTextFocus } from './components.jsx';
 import { wm } from './windows.js';
 import { useStore } from './store.js';
@@ -181,6 +182,8 @@ export function MenuButton({ icon = '⋯', label, title, items, small, onOpenCha
   const was = useRef(false);
   useEffect(() => { if (was.current !== open) { was.current = open; onOpenChange?.(open); } }, [open]);
   const btn = useRef(null), menu = useRef(null);
+  const present = useMenuPresence(open, t.reduceMotion);
+  useAnimatedStyle(menu, 'opacity', open ? 1 : 0, !!t.reduceMotion, open ? 100 : 80, 0, present);
   useEffect(() => {
     if (!open) return undefined;
     return addListener('pointerdown', (e) => {
@@ -188,17 +191,17 @@ export function MenuButton({ icon = '⋯', label, title, items, small, onOpenCha
       if (!inside(menu.current) && !inside(btn.current)) setOpen(false);
     });
   }, [open]);
-  const end = open && nearEnd(winId, btn.current);
-  const up = open && nearBottom(winId, btn.current, items);
+  const end = present && nearEnd(winId, btn.current);
+  const up = present && nearBottom(winId, btn.current, items);
   // the menu goes in the overlay layer (sdk/layers.js): above the rest of the window, whatever
   // comes after the button, and not clipped by a scrolling parent
   return (
     <View ref={btn}>
       {trigger ? <View onClick={() => setOpen((o) => !o)} focusable onKeyDown={onKey}>{trigger(open)}</View>
         : <ToolbarButton icon={icon} label={label} title={open ? null : title} small={small} active={open} onClick={() => setOpen((o) => !o)} onKeyDown={onKey} />}
-      {open && (
+      {present && (
         <Overlay anchor={btn}>
-          <View ref={menu} style={{ position: 'absolute', [up ? 'bottom' : 'top']: (trigger ? lord.getLayout(btn.current.id)[3] : small ? controlSize.small : controlSize.regular) + 4, [end ? 'right' : 'left']: 0,
+          <View ref={menu} style={{ pointerEvents: open ? 'auto' : 'none', position: 'absolute', [up ? 'bottom' : 'top']: (trigger ? lord.getLayout(btn.current.id)[3] : small ? controlSize.small : controlSize.regular) + 4, [end ? 'right' : 'left']: 0,
             minWidth, paddingVertical: 5, paddingHorizontal: 5, borderRadius: t.menuRadius, backgroundColor: popupBg(t),
             border: `1px solid ${t.separator}`, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
             {items.map((it, i) => (it === '-' ? <View key={`s${i}`} style={{ height: 1, marginVertical: 4, marginHorizontal: 6, backgroundColor: t.separator }} />
@@ -507,6 +510,8 @@ export function Dropdown({ value, options, onChange, width = 180, placeholder, s
   const { id: winId } = useAppWindow();
   const btn = useRef(null), list = useRef(null), scroll = useRef(null);
   const [open, setOpen] = useState(false);
+  const present = useMenuPresence(open, t.reduceMotion);
+  useAnimatedStyle(list, 'opacity', open ? 1 : 0, !!t.reduceMotion, open ? 100 : 80, 0, present);
   const [lit, setLit] = useState(-1);
   const typed = useRef(null);
   const current = options.findIndex((o) => o[0] === value);
@@ -548,7 +553,7 @@ export function Dropdown({ value, options, onChange, width = 180, placeholder, s
   }, [open, lit]);
   const h = small ? controlSize.small : controlSize.regular - 2;
   const cur = current >= 0 ? options[current][1] : placeholder ?? tr('shell.control.choose');
-  const end = open && nearEnd(winId, btn.current);
+  const end = present && nearEnd(winId, btn.current);
   const rows = options.map(([v, label], i) => {
     const on = lit === i;
     const fill = on && t.menuHighlight !== 'subtle';
@@ -569,9 +574,9 @@ export function Dropdown({ value, options, onChange, width = 180, placeholder, s
         <Text style={{ flex: 1, fontSize: small ? 12 : 13, color: current >= 0 ? t.text : t.textDim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'start' }}>{cur}</Text>
         <Text style={{ fontSize: 9, color: t.textDim }}>▼</Text>
       </View>
-      {open && (
+      {present && (
         <Overlay anchor={btn}>
-          <View ref={list} style={{ position: 'absolute', top: h + 4, [end ? 'right' : 'left']: 0, minWidth: Math.max(width, 160), padding: 5, borderRadius: t.menuRadius,
+          <View ref={list} style={{ pointerEvents: open ? 'auto' : 'none', position: 'absolute', top: h + 4, [end ? 'right' : 'left']: 0, minWidth: Math.max(width, 160), padding: 5, borderRadius: t.menuRadius,
             backgroundColor: popupBg(t), border: `1px solid ${t.separator}`, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
             {options.length > DROP_ROWS
               ? <View style={{ height: DROP_ROWS * DROP_ROW }}><ScrollView scrollRef={scroll} focusable={false} style={{ flex: 1 }}>{rows}</ScrollView></View>

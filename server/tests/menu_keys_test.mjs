@@ -29,7 +29,10 @@ for (const d of ['sdk', 'runtime', 'themes/default', 'themes/default/components'
 
 // A stub lord: nodes, their parents and texts (and which left the tree), every character 10 px wide; any other
 // native call is a no-op.
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
   const styles = new Map(), texts = new Map(), parents = new Map(), removed = new Set();
   let nextId = 1;
   const base = {

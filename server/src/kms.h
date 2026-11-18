@@ -35,6 +35,7 @@ typedef struct {
     uint32_t *cursor_map;
     uint64_t cursor_size;
     int cursor_ok, cursor_visible;
+    int cursor_hot_x, cursor_hot_y;
     int borrowed;       /* the fd came from lord-sessiond (it handles master and the previous mode) */
     /* boot splash hand-off (kms_attach with keep): no modeset until the first real frame, so the
      * splash stays up instead of a black frame. presented: a frame of ours is on the screen. */

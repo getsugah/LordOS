@@ -49,6 +49,7 @@
 #include "../sysreport/sysreport.h"
 #include "lord_version.h"           /* build/gen: version, channel and build (Makefile) */
 
+#include <spawn.h>
 #include <ctype.h>
 #include <fcntl.h>
 #include <grp.h>
@@ -1350,6 +1351,34 @@ static JSValue f_fs_trash_empty(JSContext *c, JSValueConst this_val, int argc, J
     return JS_NewInt32(c, fstrash_empty());
 }
 
+/* Explicit AppImage actions only; never run a shell or change permissions on open. */
+static JSValue f_fs_appimage(JSContext *c, JSValueConst self, int argc, JSValueConst *argv) {
+    (void)self;
+    const char *p = argc ? JS_ToCString(c, argv[0]) : NULL;
+    char path[PATH_MAX];
+    struct stat st;
+    int err = EACCES;
+    if (!p) return JS_EXCEPTION;
+    size_t n = strlen(p);
+    int valid = n >= 9 && !strcasecmp(p + n - 9, ".AppImage") &&
+        !resolve_in_home(p, path) && !stat(path, &st) && S_ISREG(st.st_mode);
+    JS_FreeCString(c, p);
+    if (valid) {
+        if (argc > 1) {
+            mode_t mode = st.st_mode & 07777;
+            mode = JS_ToBool(c, argv[1]) ? mode | S_IXUSR : mode & ~0111;
+            err = chmod(path, mode) ? errno : 0;
+        } else {
+            extern char **environ;
+            pid_t pid;
+            char *args[] = { path, NULL };
+            err = posix_spawn(&pid, path, NULL, NULL, args, environ);
+        }
+    }
+    if (err) return js_throw_code(c, "sys.errno", "errno", lerr_errno(err), NULL);
+    return JS_TRUE;
+}
+
 /* lord.fs.stat(path) → { name, path, dir, link, target, size, mode, user, group, mtime, atime, ctime, btime } */
 static JSValue f_fs_stat(JSContext *c, JSValueConst this_val, int argc, JSValueConst *argv) {
     (void)this_val; (void)argc;
@@ -1567,6 +1596,7 @@ static const JSCFunctionListEntry fs_funcs[] = {
     JS_CFUNC_DEF("removeFromTrash", 1, f_fs_trash_remove),
     JS_CFUNC_DEF("emptyTrash", 0, f_fs_trash_empty),
     JS_CFUNC_DEF("stat", 1, f_fs_stat),
+    JS_CFUNC_DEF("appImage", 2, f_fs_appimage),
     JS_CFUNC_DEF("du", 2, f_fs_du),
     JS_CFUNC_DEF("free", 1, f_fs_free),
     JS_CFUNC_DEF("search", 3, f_fs_search),

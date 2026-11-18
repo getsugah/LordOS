@@ -291,6 +291,10 @@ EOF
     # Desktops: what shows and who has the keyboard (sdk/desktopmodel.js)
     if have node; then run "desktop-model-test (sdk/desktopmodel.js)" node tests/desktop_model_test.mjs
     else skip "desktop-model-test" "node"; fi
+    if have node; then run "microanimation-test (finite native styles)" node tests/microanimation_test.mjs
+    else skip "microanimation-test" "node"; fi
+    if have node; then run "microanimation-scene (React lifecycle and notifications)" node tests/focus_scene_test.mjs microanimation_scene.mjs
+    else skip "microanimation-scene" "node"; fi
     # (0.8.8.8) a Linux app's dialog kept with its window: over it, moved with it, a modal one above it (sdk/dialogmodel.js)
     if have node; then run "dialog-model-test (sdk/dialogmodel.js)" node tests/dialog_model_test.mjs
     else skip "dialog-model-test" "node"; fi

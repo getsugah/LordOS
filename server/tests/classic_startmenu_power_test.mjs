@@ -31,7 +31,10 @@ for (const d of ['sdk', 'runtime', 'themes/classic', 'themes/classic/components'
 
 // A stub lord: nodes, their styles and texts; a managed session whose lock and switchUser are recorded;
 // any other native call is a no-op.
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
   const styles = new Map(), texts = new Map(), parents = new Map(), calls = [];
   let nextId = 1;
   const base = {

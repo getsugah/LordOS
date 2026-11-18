@@ -656,6 +656,18 @@ build/engine-test: tests/engine_test.c $(ENGINE_SRC) src/outputs.c src/bench/lbi
 # the frame pipeline's decisions (src/fpipe.c, docs/GPU.md "The frame pipeline"): LORD_PIPELINE, the auto
 # mode, what a display does next, when input waits, and a display on a vblank grid with and without it
 test: build/fpipe-test
+
+# Explicit offscreen GLES integration test; needs Mesa's surfaceless EGL driver.
+# It never opens DRM or starts a desktop. Separate from the CPU-only default suite.
+GPU_TEST_LIBS ?= $(shell pkg-config --libs egl glesv2)
+GPU_TEST_CFLAGS ?= $(shell pkg-config --cflags egl glesv2 gbm)
+.PHONY: test-gpu-multioutput
+test-gpu-multioutput: build/gpu-multioutput-test
+	./build/gpu-multioutput-test
+build/gpu-multioutput-test: tests/gpu_multioutput_test.c src/gpu/gpu.c src/gpu/gpu.h src/buffertransform.h src/gpu/gscissor.c src/canvas.c src/par.c
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -DLORD_GPU $(GPU_TEST_CFLAGS) -ffunction-sections -fdata-sections -std=c11 -o $@ tests/gpu_multioutput_test.c src/gpu/gscissor.c src/canvas.c src/par.c -Wl,--gc-sections $(GPU_TEST_LIBS) -lm -lpthread
+
 build/fpipe-test: tests/fpipe_test.c src/fpipe.c src/fpipe.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -o $@ tests/fpipe_test.c src/fpipe.c
@@ -869,6 +881,12 @@ build/term-capture-test: tests/term_capture_test.c src/term/tcapture.c src/term/
 	./$@ || { rm -f $@; exit 1; }
 
 # the pointer's size at each display scale, the size setting and shake to find it (src/cursor.c)
+test: build/kms-cursor-test
+build/kms-cursor-test: tests/kms_cursor_test.c src/kms.c src/kms.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -ffunction-sections -fdata-sections -o $@ tests/kms_cursor_test.c src/kms.c -Wl,--gc-sections -Wl,--wrap=ioctl
+	./$@ || { rm -f $@; exit 1; }
+
 test: build/cursor-test
 build/cursor-test: tests/cursor_test.c src/cursor.c src/cursor.h
 	@mkdir -p build
@@ -1130,6 +1148,19 @@ build/grab-buttons-test: tests/grab_buttons_test.c src/ui/grab.c src/ui/grab.h s
 	./$@ || { rm -f $@; exit 1; }
 
 test: build/wl-mousebuttons-test
+SHM_TEST_WRAP := get get_width get_height get_stride get_format get_data begin_access end_access
+test: build/wl-subsurface-test
+build/wl-subsurface-test: tests/wl_subsurface_test.c src/wl/wl.c src/wl/xwscale.c $(HDR)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -ffunction-sections -fdata-sections -o $@ tests/wl_subsurface_test.c src/wl/xwscale.c -Wl,--gc-sections -Wl,--wrap=wl_resource_post_error -Wl,--wrap=wl_client_post_no_memory -lwayland-server -lm
+	./$@ || { rm -f $@; exit 1; }
+
+test: build/wl-shm-damage-test
+build/wl-shm-damage-test: tests/wl_shm_damage_test.c src/wl/wl.c src/wl/xwscale.c src/gpu/gscissor.c build/gen/presentation-time-protocol.o $(HDR)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -ffunction-sections -fdata-sections -o $@ tests/wl_shm_damage_test.c src/wl/xwscale.c src/gpu/gscissor.c build/gen/presentation-time-protocol.o -Wl,--gc-sections -Wl,--wrap=wl_resource_post_error -Wl,--wrap=wl_resource_post_event $(foreach f,$(SHM_TEST_WRAP),-Wl,--wrap=wl_shm_buffer_$(f)) -lwayland-server -lm
+	./$@ || { rm -f $@; exit 1; }
+
 build/wl-mousebuttons-test: tests/wl_mousebuttons_test.c src/wl/wl.c $(HDR)
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -ffunction-sections -fdata-sections -o $@ tests/wl_mousebuttons_test.c -Wl,--gc-sections -lwayland-server -lwayland-client

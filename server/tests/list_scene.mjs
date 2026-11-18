@@ -53,7 +53,12 @@ const tab = async (n = 1) => { for (let i = 0; i < n; i++) await key('Tab'); };
 const inTree = (id) => { for (let n = id; n; n = parents.get(n)) if (removed.has(n)) return false; return true; };
 const rings = () => [...styles].filter(([id, s]) => s.borderWidth === 2 && s.pointerEvents === 'none' && s.position === 'absolute' && inTree(id) && parents.has(id));
 const ringOn = () => { const r = rings(); return r.length === 1 ? parents.get(r[0][0]) : r.length ? 'many' : null; };
-const textNode = (label) => [...texts].find(([id, s]) => s === label && inTree(id))?.[0];
+// Exclude the visual tail of a closed dropdown from logical interaction checks.
+const textNode = (label) => [...texts].find(([id, s]) => {
+  if (s !== label || !inTree(id)) return false;
+  for (let n = id; n; n = parents.get(n)) if (styles.get(n)?.pointerEvents === 'none') return false;
+  return true;
+})?.[0];
 const ringAround = (label) => { const r = ringOn(); for (let n = textNode(label); n; n = parents.get(n)) if (n === r) return true; return false; };
 const click = async (id) => { __lordEvent('down', id, 1, 1, 0); __lordEvent('up', id, 1, 1, 0); await flush(); };
 const heard = [];

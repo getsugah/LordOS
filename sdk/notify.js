@@ -12,7 +12,8 @@
 // action or the × is pressed. Clicking the banner runs `defaultAction` ({ id, run }: the click on the notification
 // itself, never shown as a button) when there is one, else the first action.
 // The app passes texts already translated (t()). The history lives in memory only.
-import { createElement as h, useEffect, useState } from 'react';
+import { createElement as h, useEffect, useState, useRef, useMemo } from 'react';
+import { useAnimatedStyle, useLeavingItems } from './microanimation-hooks.js';
 import { View, Text } from '@lordos/runtime';
 import { createStore, useStore } from './store.js';
 import { useTheme } from './theme.js';
@@ -124,14 +125,18 @@ function runAction(n, a) {
   try { a.run?.(); } catch (e) { console.error('notify:', e); }
 }
 
-function Banner({ n, th }) {
+function Banner({ n, th, leaving = false }) {
+  const ref = useRef(null);
+  const reduce = useStore(settings, (s) => !!s.reduceMotion);
+  useAnimatedStyle(ref, 'opacity', leaving ? 0 : 1, reduce, leaving ? 80 : 140, 0);
   const [hover, setHover] = useState(false);
   const app = n.app ? getApp(n.app) : null;
   const first = n.defaultAction || n.actions[0];
   return h(View, {
+    ref,
     onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false),
-    onClick: () => (first ? runAction(n, first) : dismissNotification(n.id)),
-    style: { width: 340, padding: 12, gap: 8, borderRadius: 14, backgroundColor: th.windowBg, border: `1px solid ${th.separator}`,
+    onClick: leaving ? undefined : () => (first ? runAction(n, first) : dismissNotification(n.id)),
+    style: { pointerEvents: leaving ? 'none' : 'auto', width: 340, padding: 12, gap: 8, borderRadius: 14, backgroundColor: th.windowBg, border: `1px solid ${th.separator}`,
       boxShadow: '0 10px 30px rgba(0,0,0,0.4)' },
   },
   h(View, { style: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' } },
@@ -157,23 +162,27 @@ function Banner({ n, th }) {
 
 export function NotificationBanner() {
   const list = useNotifications();
+  const reduce = useStore(settings, (s) => !!s.reduceMotion);
+  const grouping = useStore(settings, (s) => notifyPrefs(s).grouping);
+  const current = useMemo(() => grouped(list), [list, grouping]);
+  const retained = useLeavingItems(current, reduce);
   // drawn outside the theme's provider: follow the user's light/dark setting
   const base = useTheme(), mode = useStore(settings, (x) => x.mode);
   const th = mode === 'light' ? { ...base, mode: 'light', windowBg: '#f6f6f8', text: '#1d1d1f', textDim: 'rgba(60,60,67,0.62)',
     separator: 'rgba(0,0,0,0.12)', control: '#e2e2e7' } : base;
   const [, force] = useState(0);
   useEffect(() => { if (list.length) force((x) => x + 1); }, [list.length]);
-  if (!list.length) return null;
+  if (!retained.length) return null;
   const area = workArea() || { x: 0, y: 0, w: screen.width, h: screen.height };
   const rtl = direction() === 'rtl';
   const left = rtl ? (area.x || 0) + 12 : (area.x || 0) + (area.w || screen.width) - 352;
   const at = placement === 'bottom'
     ? { bottom: Math.max(0, screen.height - ((area.y || 0) + (area.h || screen.height))) + 12 }
     : { top: (area.y || 0) + 10 };
-  const shown = grouped(list);
+  const shown = retained.slice();
   if (placement === 'bottom') shown.reverse();          // the newest one next to the taskbar
   return h(View, { style: { position: 'absolute', left, width: 340, gap: 10, ...at } },
-    ...shown.map((n) => h(Banner, { key: n.id, n, th })));
+    ...shown.map(({ item: n, until }) => h(Banner, { key: n.id, n, th, leaving: !!until })));
 }
 
 // Grouping by app (Settings → Notifications): the newest banner of each app, with "+N".

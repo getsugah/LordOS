@@ -22,6 +22,8 @@ prev = new Map([[1, false], [2, false]]);
 eq('reduce motion: none starts', ids(minimizeStarts([{ id: 1, minimized: true }, { id: 2, minimized: true }], prev, { reduce: true })), []);
 eq('reduce motion: the state is kept', [...prev], [[1, true], [2, true]]);
 eq('reduce motion off again: a later minimize animates', (minimizeStarts([{ id: 1 }], prev), ids(minimizeStarts([{ id: 1, minimized: true }], prev))), [1]);
+minimizeStarts([], prev);
+eq('closed windows leave no tracked state', [...prev], []);
 
 console.log(`minimize-model-test: ${ok} ok, ${bad} failures`);
 process.exit(bad ? 1 : 0);

@@ -29,7 +29,10 @@ for (const d of ['sdk', 'runtime', 'themes/classic', 'themes/classic/components'
 
 // A stub lord: nodes, their styles and texts (and which ones left the tree); lord.getLayout answers from a map the
 // scene fills (the bars' rectangles), far off screen otherwise; settings saved in memory; the network polls counted.
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
   const styles = new Map(), texts = new Map(), parents = new Map(), removed = new Set(), layouts = new Map();
   const counts = { netPolls: 0 };
   let nextId = 1, saved = '{}';

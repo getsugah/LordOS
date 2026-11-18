@@ -475,14 +475,14 @@ addListener('pointerup', (e) => {
   const st = dockDrag.get();
   dockDrag.set(null);
   if (over && over.trash) {
-    if (p.source === 'dock' && dock.unpin(p.id)) dockPoof.set({ x: e.x, y: e.y, Icon: p.Icon, t0: Date.now() });
+    if (p.source === 'dock' && dock.unpin(p.id)) dockPoof.set({ x: e.x, y: e.y, Icon: p.Icon, t0: performance.now() });
     return;
   }
   if (over && over.index != null) {
     if (p.source === 'dock' && dock.isPinned(p.id)) dock.move(p.id, over.index); else dock.pin(p.id, over.index);
     return;
   }
-  if (p.source === 'dock' && st?.removing && dock.unpin(p.id)) dockPoof.set({ x: e.x, y: e.y, Icon: p.Icon, t0: Date.now() });
+  if (p.source === 'dock' && st?.removing && dock.unpin(p.id)) dockPoof.set({ x: e.x, y: e.y, Icon: p.Icon, t0: performance.now() });
 });
 // Escape cancels a drag.
 addListener('keydown', (e) => {

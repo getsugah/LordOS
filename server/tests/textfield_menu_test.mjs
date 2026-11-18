@@ -27,7 +27,10 @@ if (!esbuild) { console.log('needs node_modules (esbuild)'); process.exit(1); }
 // A stub lord: nodes, their parents and texts (and which were taken out of the tree), a clipboard and a primary selection, the English shell catalog, every character 10 px wide; any
 // other native call is a no-op.
 const shellEn = readFileSync(path.join(root, 'assets', 'locales', 'en', 'shell.json'), 'utf8');
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
   const styles = new Map(), parents = new Map(), texts = new Map(), removed = new Set(), clip = { text: '' }, prim = { text: '' };
   let nextId = 1;
   const noop = () => undefined;

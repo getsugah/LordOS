@@ -4,6 +4,8 @@
 // prev (Map id → minimized) is what the last render saw, and it is updated here.
 export function minimizeStarts(windows, prev, { reduce = false, now = Date.now() } = {}) {
   const started = [];
+  const live = new Set(windows.map((w) => w.id));
+  for (const id of prev.keys()) if (!live.has(id)) prev.delete(id);
   for (const w of windows) {
     if (!reduce && w.minimized && prev.get(w.id) === false && !w.fullscreen && !w.pip) started.push({ id: w.id, t0: now });
     prev.set(w.id, !!w.minimized);

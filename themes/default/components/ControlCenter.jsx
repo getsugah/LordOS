@@ -9,6 +9,7 @@ import {
   panelLeft, inBar,
 } from '@lordos/sdk';
 import { useEffect, useRef, useState } from 'react';
+import { usePanelEntrance } from '../../../sdk/microanimation-hooks.js';
 
 // Four wallpapers fit in the tile: the current one and a few from the collection (all of them are
 // in Settings → Wallpaper, which «Change Wallpaper…» opens).
@@ -157,6 +158,7 @@ export function ControlCenter({ t, top, onClose, area = null, at = null }) {
   const cpu = useCpuUsage(1500);
   const info = useSystemInfo(3000);
   const ref = useRef(null);
+  usePanelEntrance(ref);
   const used = info.memTotalKB > 0 ? memUsedKB(info) / info.memTotalKB : 0;
   // a click on this display's bar is its items' own (the button toggles the panel); anywhere else closes it, another
   // display's bar too (its button then opens the panel there)

@@ -8,6 +8,7 @@ import {
   openCalendarApp, panelLeft, inBar,
 } from '@lordos/sdk';
 import { useEffect, useRef, useState } from 'react';
+import { usePanelEntrance } from '../../../sdk/microanimation-hooks.js';
 
 const W = 340;
 
@@ -95,6 +96,7 @@ const inside = (inst, ref) => { for (let n = inst; n; n = n.parent) if (n === re
 // width] of the clock (or the bell) that opened it, so it sits under it, inside that display
 export function NotificationCenter({ t, top, onClose, area, at = null }) {
   const ref = useRef(null);
+  usePanelEntrance(ref);
   const list = useStore(notifyHistory);
   const [s] = useSettings();
   const p = menuBarPrefs(s);

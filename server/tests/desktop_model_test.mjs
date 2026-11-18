@@ -283,5 +283,22 @@ eq('notice: not a window with an app id, a title, a parent, a dialog or X11', [
   eq('covered: LordOS windows are never listed', ids([N('notes#1', 100, 100, 10, 10), N('files#1', 0, 0, 1280, 800)]), []);
 }
 
+// Narrow displays keep every desktop card within the work area, in both directions.
+for (const count of [8, 9]) for (const rtl of [false, true]) {
+  const area = { x: 100, y: 0, w: 640, h: 480 };
+  const strip = stripLayout(Array.from({ length: count }, (_, i) => i + 1), area, { canAdd: count < MAX_DESKTOPS, rtl });
+  const rects = [...strip.cards, ...(strip.add ? [strip.add] : [])];
+  eq(`narrow strip ${count} rtl=${rtl}`, rects.every((r) => r.w > 0 && r.x >= area.x && r.x + r.w <= area.x + area.w), true);
+}
+// Name dictionaries must replace store state: merging would retain deleted entries.
+{
+  const { createStore } = await import('../../sdk/store.js');
+  const names = createStore({ 2: 'Travail', 3: 'Personnel' });
+  names.set((old) => withName(old, 2, ''));
+  eq('store: clearing a desktop name removes its key', names.get(), { 3: 'Personnel' });
+  names.set(() => ({}));
+  eq('store: a fresh desktop session clears old names', names.get(), {});
+}
+
 if (bad) { console.error(`desktop-model-test: ${bad} of ${n} failed`); process.exit(1); }
 console.log(`desktop-model-test: ${n} checks passed`);

@@ -3339,6 +3339,38 @@ static void bench(void) {
     d[1] = (Disp){ 1920, 1200, 1280, 1.5f, NULL, {0} };
     for (int i = 0; i < 2; i++) { d[i].px = calloc((size_t)d[i].w * d[i].h, 4); canvas_init(&d[i].c, d[i].px, d[i].w, d[i].h, d[i].w); }
 
+    /* Optional CPU-only cost of the native window opacity entrance versus steady opacity.
+     * Same 2000-row scene, with a straddling window for the two-display case.
+     * This is rendering work, not KMS presentation, GPU time or missed frames. */
+    if (getenv("BENCH_WINDOW_FADE")) {
+        enum { SAMPLES = 41 };
+        double costs[SAMPLES];
+        for (int nd = 1; nd <= 2; nd++) {
+            sn(win, "left", nd == 2 ? 1000 : 120);
+            sn(dlg, "left", nd == 2 ? 1100 : 300);
+            for (int fade = 0; fade <= 1; fade++) {
+                sn(win, "opacity", 1);
+                frame_paint(root, d, nd);
+                t_layout = t_damage = t_paint = 0;
+                double sum = 0, worst = 0;
+                for (int f = 0; f < SAMPLES; f++) {
+                    double a = now_ms();
+                    sn(win, "opacity", fade ? 0.2 + 0.8 * (f % 10) / 9.0 : 1);
+                    frame_paint(root, d, nd);
+                    double ms = now_ms() - a;
+                    costs[f] = ms; sum += ms;
+                    if (ms > worst) worst = ms;
+                }
+                double med = median(costs, SAMPLES);
+                printf("window-opacity CPU (%d display%s, %s): median %.3f ms, p95 %.3f, mean %.3f, max %.3f; layout %.3f, damage %.3f, paint %.3f\n",
+                       nd, nd > 1 ? "s" : "", fade ? "fade" : "steady", med, costs[38], sum / SAMPLES, worst,
+                       t_layout / SAMPLES, t_damage / SAMPLES, t_paint / SAMPLES);
+            }
+        }
+        for (int i = 0; i < 2; i++) free(d[i].px);
+        return;
+    }
+
     /* layout: cold (every text measured) and warm (cache); medians, the machine may be busy */
     double t0 = now_ms();
     layout_root(root, 1280, 800);

@@ -8,7 +8,7 @@
 // actions, which validate again on the root side: never the system disk, and internal disks only
 // for an administrator.
 import {
-  needsDiskFormats, openDiskFormats, View, Text, ScrollView, useTheme, useLocale, useSystemInfo, useAppWindow, admin, useDisks, disks, formatBytes,
+  needsDiskFormats, openDiskFormats, View, Text, Button, ScrollView, useTheme, useLocale, useSystemInfo, useAppWindow, admin, useDisks, disks, formatBytes,
   Toolbar as Bar, ToolbarButton, ToolbarSpacer, MenuButton, Hairline, GroupBox, FormRow, EmptyState, spacing, typeScale,
 } from '@lordos/sdk';
 import { useEffect, useMemo, useRef, useState } from 'react';

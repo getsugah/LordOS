@@ -137,8 +137,8 @@ extern char sd_cursor_env[24];
 /* "LORD_MAIN_DISPLAY=<connector>" for the login screen: the main display last chosen in a session shown on
  * the monitor (kept in /var/lib/lordos/main-display), or empty */
 extern char sd_main_display[64];
-#define SD_TUNE_N 4
-extern char sd_tune_env[SD_TUNE_N][32]; /* the service's LORD_GPU_SCISSOR, LORD_GPU_DRAG, LORD_PIPELINE, LORD_GPU_VERIFY for user sessions */
+#define SD_TUNE_N 5
+extern char sd_tune_env[SD_TUNE_N][32]; /* GPU and frame-pipeline settings for user sessions */
 extern int sd_input_debug;              /* LORD_INPUT_DEBUG=1 for user sessions (keylag.h) */
 
 /* ---- conn.c: one remote desktop connection (in a child process) ---- */

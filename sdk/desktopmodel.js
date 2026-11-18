@@ -256,7 +256,7 @@ export function gridLayout(list, a, frame = (w) => w) {
 export function stripLayout(list, a, { aspect = 1.6, canAdd = true, rtl = false } = {}) {
   const gap = 12, addW = 44, top = 14;
   const n = list.length, room = a.w - 2 * PAD - (canAdd ? addW + gap : 0) - gap * Math.max(0, n - 1);
-  const w = Math.round(Math.max(72, Math.min(168, room / Math.max(1, n))));
+  const w = Math.round(Math.max(1, Math.min(168, Math.floor(room / Math.max(1, n)))));
   const h = Math.round(w / aspect);
   const total = n * w + gap * Math.max(0, n - 1) + (canAdd ? addW + gap : 0);
   const left = Math.round(a.x + (a.w - total) / 2);

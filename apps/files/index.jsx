@@ -583,7 +583,7 @@ export default function Files() {
     setConfirm({ text: tr('files.confirm.pasteFrom', { count: ask.count, app }), detail: lines.join('\n'), ok: tr('files.menu.paste'), cautious: true,
       run: () => paste(dir, knownNames(dir), c) });
   };
-  const ctx = { navigate, linuxApps: launcherApps, t: tr, quickLook: (e) => { setSelected(new Set([e.path])); setQuick(true); },
+  const ctx = { reportError: (err) => setMsg(errorText(err)), navigate, linuxApps: launcherApps, t: tr, quickLook: (e) => { setSelected(new Set([e.path])); setQuick(true); },
     openArc: (e) => { setMsg(tr('docs.opening', { name: e.name })); extractEntry(e).then((real) => openEntry({ name: e.name, path: real, size: e.size, mtime: e.mtime }, ctx)).catch((err) => setMsg(tr('docs.extractError', { name: e.name, error: err.message }))); } };
   const arcReport = (m) => setMsg(m);
   // a computer: its best way in; connected shares open as folders
@@ -757,6 +757,10 @@ export default function Files() {
       { label: tr('files.menu.open'), hint: '❖↓', onClick: () => openSel(list) },
       ...(e.dir ? [prefs.favoriteFolders.some((f) => f.path === e.path) ? { label: tr('files.fav.remove'), onClick: () => removeFavoriteFolder(e.path) } : { label: tr('files.fav.add'), onClick: () => addFavorite(e.path) }, { label: tr('files.menu.openTab'), onClick: () => newTabAt({ type: 'dir', path: e.path }) }, { label: tr('files.menu.openTerminal'), onClick: () => openTerminal(e.path) }] : []),
       ...(!e.dir && openers.length ? [{ label: tr('files.menu.openWith'), submenu: openers.map((o) => ({ label: o.label, onClick: o.run })) }] : []),
+      ...(!e.dir && !fs.isRemote(e.path) && /\.appimage$/i.test(e.name) ? [{
+        label: (parseInt(statOf(e)?.mode || '0', 8) & 0o111) ? "Ne plus autoriser l'exécution" : 'Rendre exécutable',
+        onClick: () => { try { const mode = parseInt(lord.fs.stat(e.path).mode, 8); lord.fs.appImage(e.path, !(mode & 0o111)); bump(); } catch (err) { setMsg(errorText(err)); } },
+      }] : []),
       ...(() => { const ci = cloudMenuItems(list, cf, { onShare: setSharing, onMsg: setMsg }); return ci.length ? ['-', ...ci] : []; })(),
       '-',
       { label: tr('files.menu.trash'), hint: '❖⌫', onClick: () => toTrash(paths), disabled: readOnly },
@@ -1085,7 +1089,7 @@ export default function Files() {
   );
 
   return (
-    <View ref={root} style={{ flex: 1, flexDirection: 'row' }}>
+    <View ref={root} onNavigate={(e) => { e.stopPropagation(); if (e.direction === 'back') goBack(); else goForward(); }} style={{ flex: 1, flexDirection: 'row' }}>
       {/* sidebar (source list) */}
       <View style={{ width: sideW, backgroundColor: t.sidebarBg }}>
         <Hairline edge="end" />

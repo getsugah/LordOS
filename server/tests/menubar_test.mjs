@@ -31,7 +31,10 @@ for (const d of ['sdk', 'runtime', 'themes/default', 'themes/default/components'
 
 // A stub lord: nodes, their styles and texts (and which ones left the tree); two sound outputs whose
 // lord.sound.setDefault calls are recorded; a Wi-Fi radio and a Bluetooth adapter; any other native call is a no-op.
-const MOCK = `globalThis.__lordTest = (() => {
+const MOCK = `
+globalThis.requestAnimationFrame = fn => setTimeout(() => fn(performance.now()), 16);
+globalThis.cancelAnimationFrame = clearTimeout;
+globalThis.__lordTest = (() => {
   const styles = new Map(), texts = new Map(), parents = new Map(), removed = new Set(), calls = [];
   let nextId = 1;
   const base = {
